@@ -1496,13 +1496,13 @@ void computeStackSizesSimplePathTracer(
 } // end namespace pyoptix
 
 
-PYBIND11_MODULE( optix, m ) 
+PYBIND11_MODULE( _optix, m ) 
 {
     m.doc() = R"pbdoc(
         OptiX API 
         -----------------------
 
-        .. currentmodule:: optix
+        .. currentmodule:: _optix
 
         .. autosummary::
            :toctree: _generate

@@ -2,6 +2,7 @@
 
 
 import optix
+import os
 import cupy  as cp    # CUDA bindings
 import numpy as np    # Packing of structures in C-compatible format
 
@@ -70,10 +71,9 @@ def compile_cuda( cuda_file ):
         '-std=c++11',
         '-rdc',
         'true',
-        #'-IC:\\ProgramData\\NVIDIA Corporation\OptiX SDK 7.2.0\include',
         #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
         '-I/usr/local/cuda/include',
-        '-I/home/kmorley/Code/support/NVIDIA-OptiX-SDK-7.2.0-linux64-x86_64/include/'
+        f'-I{optix.include_path}'
         ] )
     return ptx
 
@@ -320,7 +320,8 @@ def launch( pipeline, sbt ):
 
 
 def main():
-    hello_ptx = compile_cuda( "examples/hello.cu" )
+    hello_cu = os.path.join(os.path.dirname(__file__), 'hello.cu')
+    hello_ptx = compile_cuda(hello_cu)
 
     init_optix()
 

@@ -69,12 +69,13 @@ class CMakeBuild(build_ext):
 setup(
     name='optix',
     version='0.0.1',
-    author='Dean Moldovan',
-    author_email='dean0x7d@gmail.com',
-    description='A test project using pybind11 and CMake',
+    author='Keith Morley',
+    author_email='kmorley@nvidia.com',
+    description='Python bindings for NVIDIA OptiX',
     long_description='',
-    ext_modules=[CMakeExtension('optix')],
+    ext_modules=[CMakeExtension('optix._optix')],
     cmdclass=dict(build_ext=CMakeBuild),
+    packages=['optix'],
     install_requires=['pynvrtc'],
     zip_safe=False,
 )

@@ -178,6 +178,27 @@ struct BuildInputTriangleArray
 
 struct BuildInputCurveArray
 {
+    BuildInputCurveArray(
+        OptixPrimitiveType  curveType,
+        unsigned int        numPrimitives , 
+        const py::list&     vertexBuffers_,
+        unsigned int        numVertices,
+        unsigned int        vertexStrideInBytes,
+        const py::list&     widthBuffers_,
+        unsigned int        widthStrideInBytes,
+        const py::list&     normalBuffers_,
+        unsigned int        normalStrideInBytes,
+        CUdeviceptr         indexBuffer,
+        unsigned int        indexStrideInBytes,
+        unsigned int        flag,
+        unsigned int        primitiveIndexOffset
+        )
+    {
+    }
+
+    std::vector<CUdeviceptr>  vertexBuffers;
+    std::vector<CUdeviceptr>  widthBuffers;
+    std::vector<CUdeviceptr>  normalBuffers;
     OptixBuildInputCurveArray build_input;
 };
 
@@ -1537,7 +1558,7 @@ PYBIND11_MODULE( optix, m )
     //
     //--------------------------------------------------------------------------
 
-    py::enum_<OptixResult>(m, "Result")
+    py::enum_<OptixResult>(m, "Result", py::arithmetic())
         .value( "SUCCESS", OPTIX_SUCCESS )
         .value( "ERROR_INVALID_VALUE", OPTIX_ERROR_INVALID_VALUE )
         .value( "ERROR_HOST_OUT_OF_MEMORY", OPTIX_ERROR_HOST_OUT_OF_MEMORY )
@@ -1576,7 +1597,7 @@ PYBIND11_MODULE( optix, m )
         .value( "ERROR_UNKNOWN", OPTIX_ERROR_UNKNOWN )
         .export_values();
 
-    py::enum_<OptixDeviceProperty>(m, "DeviceProperty")
+    py::enum_<OptixDeviceProperty>(m, "DeviceProperty", py::arithmetic())
         .value( "DEVICE_PROPERTY_LIMIT_MAX_TRACE_DEPTH", OPTIX_DEVICE_PROPERTY_LIMIT_MAX_TRACE_DEPTH )
         .value( "DEVICE_PROPERTY_LIMIT_MAX_TRAVERSABLE_GRAPH_DEPTH", OPTIX_DEVICE_PROPERTY_LIMIT_MAX_TRAVERSABLE_GRAPH_DEPTH )
         .value( "DEVICE_PROPERTY_LIMIT_MAX_PRIMITIVES_PER_GAS", OPTIX_DEVICE_PROPERTY_LIMIT_MAX_PRIMITIVES_PER_GAS )
@@ -1588,29 +1609,29 @@ PYBIND11_MODULE( optix, m )
         .value( "DEVICE_PROPERTY_LIMIT_MAX_SBT_OFFSET", OPTIX_DEVICE_PROPERTY_LIMIT_MAX_SBT_OFFSET )
         .export_values();
 
-    py::enum_<OptixDeviceContextValidationMode>(m, "DeviceContextValidationMode")
+    py::enum_<OptixDeviceContextValidationMode>(m, "DeviceContextValidationMode", py::arithmetic())
         .value( "DEVICE_CONTEXT_VALIDATION_MODE_OFF", OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF )
         .value( "DEVICE_CONTEXT_VALIDATION_MODE_ALL", OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_ALL )
         .export_values();
 
-    py::enum_<OptixGeometryFlags>(m, "GeometryFlags")
+    py::enum_<OptixGeometryFlags>(m, "GeometryFlags", py::arithmetic())
         .value( "GEOMETRY_FLAG_NONE", OPTIX_GEOMETRY_FLAG_NONE )
         .value( "GEOMETRY_FLAG_DISABLE_ANYHIT", OPTIX_GEOMETRY_FLAG_DISABLE_ANYHIT )
         .value( "GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL", OPTIX_GEOMETRY_FLAG_REQUIRE_SINGLE_ANYHIT_CALL )
         .export_values();
 
-    py::enum_<OptixHitKind>(m, "HitKind")
+    py::enum_<OptixHitKind>(m, "HitKind", py::arithmetic())
         .value( "HIT_KIND_TRIANGLE_FRONT_FACE", OPTIX_HIT_KIND_TRIANGLE_FRONT_FACE )
         .value( "HIT_KIND_TRIANGLE_BACK_FACE", OPTIX_HIT_KIND_TRIANGLE_BACK_FACE )
         .export_values();
 
-    py::enum_<OptixIndicesFormat>(m, "IndicesFormat")
+    py::enum_<OptixIndicesFormat>(m, "IndicesFormat", py::arithmetic())
         .value( "INDICES_FORMAT_NONE", OPTIX_INDICES_FORMAT_NONE )
         .value( "INDICES_FORMAT_UNSIGNED_SHORT3", OPTIX_INDICES_FORMAT_UNSIGNED_SHORT3 )
         .value( "INDICES_FORMAT_UNSIGNED_INT3", OPTIX_INDICES_FORMAT_UNSIGNED_INT3 )
         .export_values();
 
-    py::enum_<OptixVertexFormat>(m, "VertexFormat")
+    py::enum_<OptixVertexFormat>(m, "VertexFormat", py::arithmetic())
         .value( "VERTEX_FORMAT_NONE", OPTIX_VERTEX_FORMAT_NONE )
         .value( "VERTEX_FORMAT_FLOAT3", OPTIX_VERTEX_FORMAT_FLOAT3 )
         .value( "VERTEX_FORMAT_FLOAT2", OPTIX_VERTEX_FORMAT_FLOAT2 )
@@ -1620,12 +1641,12 @@ PYBIND11_MODULE( optix, m )
         .value( "VERTEX_FORMAT_SNORM16_2", OPTIX_VERTEX_FORMAT_SNORM16_2 )
         .export_values();
 
-    py::enum_<OptixTransformFormat>(m, "TransformFormat")
+    py::enum_<OptixTransformFormat>(m, "TransformFormat", py::arithmetic())
         .value( "TRANSFORM_FORMAT_NONE", OPTIX_TRANSFORM_FORMAT_NONE )
         .value( "TRANSFORM_FORMAT_MATRIX_FLOAT12", OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 )
         .export_values();
 
-    py::enum_<OptixPrimitiveType>(m, "PrimitiveType")
+    py::enum_<OptixPrimitiveType>(m, "PrimitiveType", py::arithmetic())
         .value( "PRIMITIVE_TYPE_CUSTOM", OPTIX_PRIMITIVE_TYPE_CUSTOM )
         .value( "PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE", OPTIX_PRIMITIVE_TYPE_ROUND_QUADRATIC_BSPLINE )
         .value( "PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE", OPTIX_PRIMITIVE_TYPE_ROUND_CUBIC_BSPLINE )
@@ -1641,7 +1662,7 @@ PYBIND11_MODULE( optix, m )
         .value( "PRIMITIVE_TYPE_FLAGS_TRIANGLE", OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE )
         .export_values();
 
-    py::enum_<OptixBuildInputType>(m, "BuildInputType")
+    py::enum_<OptixBuildInputType>(m, "BuildInputType", py::arithmetic())
         .value( "BUILD_INPUT_TYPE_TRIANGLES", OPTIX_BUILD_INPUT_TYPE_TRIANGLES )
         .value( "BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES", OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES )
         .value( "BUILD_INPUT_TYPE_INSTANCES", OPTIX_BUILD_INPUT_TYPE_INSTANCES )
@@ -1649,7 +1670,7 @@ PYBIND11_MODULE( optix, m )
         .value( "BUILD_INPUT_TYPE_CURVES", OPTIX_BUILD_INPUT_TYPE_CURVES )
         .export_values();
 
-    py::enum_<OptixInstanceFlags>(m, "InstanceFlags")
+    py::enum_<OptixInstanceFlags>(m, "InstanceFlags", py::arithmetic())
         .value( "INSTANCE_FLAG_NONE", OPTIX_INSTANCE_FLAG_NONE )
         .value( "INSTANCE_FLAG_DISABLE_TRIANGLE_FACE_CULLING", OPTIX_INSTANCE_FLAG_DISABLE_TRIANGLE_FACE_CULLING )
         .value( "INSTANCE_FLAG_FLIP_TRIANGLE_FACING", OPTIX_INSTANCE_FLAG_FLIP_TRIANGLE_FACING )
@@ -1658,7 +1679,7 @@ PYBIND11_MODULE( optix, m )
         .value( "INSTANCE_FLAG_DISABLE_TRANSFORM", OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM )
         .export_values();
 
-    py::enum_<OptixBuildFlags>(m, "BuildFlags")
+    py::enum_<OptixBuildFlags>(m, "BuildFlags", py::arithmetic())
         .value( "BUILD_FLAG_NONE", OPTIX_BUILD_FLAG_NONE )
         .value( "BUILD_FLAG_ALLOW_UPDATE", OPTIX_BUILD_FLAG_ALLOW_UPDATE )
         .value( "BUILD_FLAG_ALLOW_COMPACTION", OPTIX_BUILD_FLAG_ALLOW_COMPACTION )
@@ -1667,29 +1688,29 @@ PYBIND11_MODULE( optix, m )
         .value( "BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS", OPTIX_BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS )
         .export_values();
 
-    py::enum_<OptixBuildOperation>(m, "BuildOperation")
+    py::enum_<OptixBuildOperation>(m, "BuildOperation", py::arithmetic())
         .value( "BUILD_OPERATION_BUILD", OPTIX_BUILD_OPERATION_BUILD )
         .value( "BUILD_OPERATION_UPDATE", OPTIX_BUILD_OPERATION_UPDATE )
         .export_values();
 
-    py::enum_<OptixMotionFlags>(m, "MotionFlags")
+    py::enum_<OptixMotionFlags>(m, "MotionFlags", py::arithmetic())
         .value( "MOTION_FLAG_NONE", OPTIX_MOTION_FLAG_NONE )
         .value( "MOTION_FLAG_START_VANISH", OPTIX_MOTION_FLAG_START_VANISH )
         .value( "MOTION_FLAG_END_VANISH", OPTIX_MOTION_FLAG_END_VANISH )
         .export_values();
 
-    py::enum_<OptixAccelPropertyType>(m, "AccelPropertyType")
+    py::enum_<OptixAccelPropertyType>(m, "AccelPropertyType", py::arithmetic())
         .value( "PROPERTY_TYPE_COMPACTED_SIZE", OPTIX_PROPERTY_TYPE_COMPACTED_SIZE )
         .value( "PROPERTY_TYPE_AABBS", OPTIX_PROPERTY_TYPE_AABBS )
         .export_values();
 
-    py::enum_<OptixTraversableType>(m, "TraversableType")
+    py::enum_<OptixTraversableType>(m, "TraversableType", py::arithmetic())
         .value( "TRAVERSABLE_TYPE_STATIC_TRANSFORM", OPTIX_TRAVERSABLE_TYPE_STATIC_TRANSFORM )
         .value( "TRAVERSABLE_TYPE_MATRIX_MOTION_TRANSFORM", OPTIX_TRAVERSABLE_TYPE_MATRIX_MOTION_TRANSFORM )
         .value( "TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM", OPTIX_TRAVERSABLE_TYPE_SRT_MOTION_TRANSFORM )
         .export_values();
 
-    py::enum_<OptixPixelFormat>(m, "PixelFormat")
+    py::enum_<OptixPixelFormat>(m, "PixelFormat", py::arithmetic())
         .value( "PIXEL_FORMAT_HALF3", OPTIX_PIXEL_FORMAT_HALF3 )
         .value( "PIXEL_FORMAT_HALF4", OPTIX_PIXEL_FORMAT_HALF4 )
         .value( "PIXEL_FORMAT_FLOAT3", OPTIX_PIXEL_FORMAT_FLOAT3 )
@@ -1700,7 +1721,7 @@ PYBIND11_MODULE( optix, m )
 
     /*
     TODO: check for 7.2
-    py::enum_<OptixDenoiserModelKind>(m, "DenoiserModelKind")
+    py::enum_<OptixDenoiserModelKind>(m, "DenoiserModelKind", py::arithmetic())
         .value( "DENOISER_MODEL_KIND_USER", OPTIX_DENOISER_MODEL_KIND_USER )
         .value( "DENOISER_MODEL_KIND_LDR", OPTIX_DENOISER_MODEL_KIND_LDR )
         .value( "DENOISER_MODEL_KIND_HDR", OPTIX_DENOISER_MODEL_KIND_HDR )
@@ -1708,7 +1729,7 @@ PYBIND11_MODULE( optix, m )
         .export_values();
         */
 
-    py::enum_<OptixRayFlags>(m, "RayFlags")
+    py::enum_<OptixRayFlags>(m, "RayFlags", py::arithmetic())
         .value( "RAY_FLAG_NONE", OPTIX_RAY_FLAG_NONE )
         .value( "RAY_FLAG_DISABLE_ANYHIT", OPTIX_RAY_FLAG_DISABLE_ANYHIT )
         .value( "RAY_FLAG_ENFORCE_ANYHIT", OPTIX_RAY_FLAG_ENFORCE_ANYHIT )
@@ -1720,7 +1741,7 @@ PYBIND11_MODULE( optix, m )
         .value( "RAY_FLAG_CULL_ENFORCED_ANYHIT", OPTIX_RAY_FLAG_CULL_ENFORCED_ANYHIT )
         .export_values();
 
-    py::enum_<OptixTransformType>(m, "TransformType")
+    py::enum_<OptixTransformType>(m, "TransformType", py::arithmetic())
         .value( "TRANSFORM_TYPE_NONE", OPTIX_TRANSFORM_TYPE_NONE )
         .value( "TRANSFORM_TYPE_STATIC_TRANSFORM", OPTIX_TRANSFORM_TYPE_STATIC_TRANSFORM )
         .value( "TRANSFORM_TYPE_MATRIX_MOTION_TRANSFORM", OPTIX_TRANSFORM_TYPE_MATRIX_MOTION_TRANSFORM )
@@ -1728,13 +1749,13 @@ PYBIND11_MODULE( optix, m )
         .value( "TRANSFORM_TYPE_INSTANCE", OPTIX_TRANSFORM_TYPE_INSTANCE )
         .export_values();
 
-    py::enum_<OptixTraversableGraphFlags>(m, "TraversableGraphFlags")
+    py::enum_<OptixTraversableGraphFlags>(m, "TraversableGraphFlags", py::arithmetic())
         .value( "TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY", OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY )
         .value( "TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS", OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS )
         .value( "TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING", OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING )
         .export_values();
 
-    py::enum_<OptixCompileOptimizationLevel>(m, "CompileOptimizationLevel")
+    py::enum_<OptixCompileOptimizationLevel>(m, "CompileOptimizationLevel", py::arithmetic())
         .value( "COMPILE_OPTIMIZATION_DEFAULT", OPTIX_COMPILE_OPTIMIZATION_DEFAULT )
         .value( "COMPILE_OPTIMIZATION_LEVEL_0", OPTIX_COMPILE_OPTIMIZATION_LEVEL_0 )
         .value( "COMPILE_OPTIMIZATION_LEVEL_1", OPTIX_COMPILE_OPTIMIZATION_LEVEL_1 )
@@ -1742,7 +1763,7 @@ PYBIND11_MODULE( optix, m )
         .value( "COMPILE_OPTIMIZATION_LEVEL_3", OPTIX_COMPILE_OPTIMIZATION_LEVEL_3 )
         .export_values();
 
-    py::enum_<OptixCompileDebugLevel>(m, "CompileDebugLevel")
+    py::enum_<OptixCompileDebugLevel>(m, "CompileDebugLevel", py::arithmetic())
         .value( "COMPILE_DEBUG_LEVEL_DEFAULT", OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT )
         .value( "COMPILE_DEBUG_LEVEL_NONE", OPTIX_COMPILE_DEBUG_LEVEL_NONE )
         .value( "COMPILE_DEBUG_LEVEL_LINEINFO", OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO )
@@ -1750,7 +1771,7 @@ PYBIND11_MODULE( optix, m )
         .export_values();
 
     /*
-    py::enum_<OptixPayloadTypeID>(m, "PayloadTypeID")
+    py::enum_<OptixPayloadTypeID>(m, "PayloadTypeID", py::arithmetic())
         .value( "PAYLOAD_TYPE_DEFAULT", OPTIX_PAYLOAD_TYPE_DEFAULT )
         .value( "PAYLOAD_TYPE_ID_0", OPTIX_PAYLOAD_TYPE_ID_0 )
         .value( "PAYLOAD_TYPE_ID_1", OPTIX_PAYLOAD_TYPE_ID_1 )
@@ -1762,7 +1783,7 @@ PYBIND11_MODULE( optix, m )
         .value( "PAYLOAD_TYPE_ID_7", OPTIX_PAYLOAD_TYPE_ID_7 )
         .export_values();
 
-    py::enum_<OptixPayloadSemantics>(m, "PayloadSemantics")
+    py::enum_<OptixPayloadSemantics>(m, "PayloadSemantics", py::arithmetic())
         .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_NONE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_NONE )
         .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_READ", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ )
         .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE )
@@ -1790,7 +1811,7 @@ PYBIND11_MODULE( optix, m )
         .export_values();
     */
 
-    py::enum_<OptixProgramGroupKind>(m, "ProgramGroupKind")
+    py::enum_<OptixProgramGroupKind>(m, "ProgramGroupKind", py::arithmetic())
         .value( "PROGRAM_GROUP_KIND_RAYGEN", OPTIX_PROGRAM_GROUP_KIND_RAYGEN )
         .value( "PROGRAM_GROUP_KIND_MISS", OPTIX_PROGRAM_GROUP_KIND_MISS )
         .value( "PROGRAM_GROUP_KIND_EXCEPTION", OPTIX_PROGRAM_GROUP_KIND_EXCEPTION )
@@ -1798,11 +1819,11 @@ PYBIND11_MODULE( optix, m )
         .value( "PROGRAM_GROUP_KIND_CALLABLES", OPTIX_PROGRAM_GROUP_KIND_CALLABLES )
         .export_values();
 
-    py::enum_<OptixProgramGroupFlags>(m, "ProgramGroupFlags")
+    py::enum_<OptixProgramGroupFlags>(m, "ProgramGroupFlags", py::arithmetic())
         .value( "PROGRAM_GROUP_FLAGS_NONE", OPTIX_PROGRAM_GROUP_FLAGS_NONE )
         .export_values();
 
-    py::enum_<OptixExceptionCodes>(m, "ExceptionCodes")
+    py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .value( "EXCEPTION_CODE_STACK_OVERFLOW", OPTIX_EXCEPTION_CODE_STACK_OVERFLOW )
         .value( "EXCEPTION_CODE_TRACE_DEPTH_EXCEEDED", OPTIX_EXCEPTION_CODE_TRACE_DEPTH_EXCEEDED )
         .value( "EXCEPTION_CODE_TRAVERSAL_DEPTH_EXCEEDED", OPTIX_EXCEPTION_CODE_TRAVERSAL_DEPTH_EXCEEDED )
@@ -1819,7 +1840,7 @@ PYBIND11_MODULE( optix, m )
         .value( "EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS", OPTIX_EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS )
         .export_values();
 
-    py::enum_<OptixExceptionFlags>(m, "ExceptionFlags")
+    py::enum_<OptixExceptionFlags>(m, "ExceptionFlags", py::arithmetic())
         .value( "EXCEPTION_FLAG_NONE", OPTIX_EXCEPTION_FLAG_NONE )
         .value( "EXCEPTION_FLAG_STACK_OVERFLOW", OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW )
         .value( "EXCEPTION_FLAG_TRACE_DEPTH", OPTIX_EXCEPTION_FLAG_TRACE_DEPTH )
@@ -1827,7 +1848,7 @@ PYBIND11_MODULE( optix, m )
         .value( "EXCEPTION_FLAG_DEBUG", OPTIX_EXCEPTION_FLAG_DEBUG )
         .export_values();
 
-    py::enum_<OptixQueryFunctionTableOptions>(m, "QueryFunctionTableOptions")
+    py::enum_<OptixQueryFunctionTableOptions>(m, "QueryFunctionTableOptions", py::arithmetic())
         .value( "QUERY_FUNCTION_TABLE_OPTION_DUMMY", OPTIX_QUERY_FUNCTION_TABLE_OPTION_DUMMY )
         .export_values();
 
@@ -1948,7 +1969,7 @@ PYBIND11_MODULE( optix, m )
                 unsigned int,
                 OptixTransformFormat
             >(), 
-            py::arg( "vertexBuffers_"              ) = py::list(), // list of CUdeviceptr
+            py::arg( "vertexBuffers"               ) = py::list(), // list of CUdeviceptr
             py::arg( "vertexFormat"                ) = OPTIX_VERTEX_FORMAT_NONE,
             py::arg( "vertexStrideInBytes"         ) = 0u,
             py::arg( "indexBuffer"                 ) = 0u,
@@ -1956,7 +1977,7 @@ PYBIND11_MODULE( optix, m )
             py::arg( "indexFormat"                 ) = OPTIX_INDICES_FORMAT_NONE,
             py::arg( "indexStrideInBytes"          ) = 0u,
             py::arg( "preTransform"                ) = 0u,
-            py::arg( "flags_"                      ) = py::list(), // list of uint32_t 
+            py::arg( "flags"                       ) = py::list(), // list of uint32_t 
             py::arg( "numSbtRecords"               ) = 0u,
             py::arg( "sbtIndexOffsetBuffer"        ) = 0u,
             py::arg( "sbtIndexOffsetSizeInBytes"   ) = 0u,
@@ -2062,22 +2083,117 @@ PYBIND11_MODULE( optix, m )
             )
         ;
 
-    py::class_<OptixBuildInputCurveArray>(m, "BuildInputCurveArray")
-        .def( py::init([]() { return std::unique_ptr<OptixBuildInputCurveArray>(new OptixBuildInputCurveArray{} ); } ) )
-        .def_readwrite( "curveType", &OptixBuildInputCurveArray::curveType )
-        .def_readwrite( "numPrimitives", &OptixBuildInputCurveArray::numPrimitives )
-        .def_readwrite( "vertexBuffers", &OptixBuildInputCurveArray::vertexBuffers )
-        .def_readwrite( "numVertices", &OptixBuildInputCurveArray::numVertices )
-        .def_readwrite( "vertexStrideInBytes", &OptixBuildInputCurveArray::vertexStrideInBytes )
-        .def_readwrite( "widthBuffers", &OptixBuildInputCurveArray::widthBuffers )
-        .def_readwrite( "widthStrideInBytes", &OptixBuildInputCurveArray::widthStrideInBytes )
-        .def_readwrite( "normalBuffers", &OptixBuildInputCurveArray::normalBuffers )
-        .def_readwrite( "normalStrideInBytes", &OptixBuildInputCurveArray::normalStrideInBytes )
-        .def_readwrite( "indexBuffer", &OptixBuildInputCurveArray::indexBuffer )
-        .def_readwrite( "indexStrideInBytes", &OptixBuildInputCurveArray::indexStrideInBytes )
-        .def_readwrite( "flag", &OptixBuildInputCurveArray::flag )
-        .def_readwrite( "primitiveIndexOffset", &OptixBuildInputCurveArray::primitiveIndexOffset )
-        ;
+    py::class_<pyoptix::BuildInputCurveArray>(m, "BuildInputCurveArray")
+        .def( 
+            py::init< 
+                OptixPrimitiveType,
+                unsigned int, 
+                const py::list&,
+                unsigned int,
+                unsigned int,
+                const py::list&,
+                unsigned int,
+                const py::list&,
+                unsigned int,
+                CUdeviceptr,
+                unsigned int,
+                unsigned int,
+                unsigned int
+            >(), 
+            py::arg( "curveType"                   ) = OPTIX_PRIMITIVE_TYPE_ROUND_LINEAR,
+            py::arg( "numPrimitives"               ) = 0u,
+            py::arg( "vertexBuffers"               ) = py::list(), // list of CUdeviceptr
+            py::arg( "numVertices"                 ) = 0u,
+            py::arg( "vertexStrideInBytes"         ) = 0u,
+            py::arg( "widthBuffers"                ) = py::list(), // list of CUdeviceptr
+            py::arg( "widthStrideInBytes"          ) = 0u,
+            py::arg( "normalBuffers"               ) = py::list(), // list of CUdeviceptr
+            py::arg( "normalStrideInBytes"         ) = 0u,
+            py::arg( "indexBuffer"                 ) = 0llu,
+            py::arg( "indexStrideInBytes"          ) = 0u,
+            py::arg( "flag"                        ) = 0u,
+            py::arg( "primitiveIndexOffset"        ) = 0u
+        )
+        .def_property( "curveType", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.curveType; }, 
+            [](pyoptix::BuildInputCurveArray& self, OptixPrimitiveType val) 
+            { self.build_input.curveType = val; }
+            )
+        .def_property( "numPrimitives", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.numPrimitives; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.numPrimitives = val; }
+            )
+        .def_property( "vertexBuffers", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return py::cast( self.vertexBuffers ); }, 
+            [](pyoptix::BuildInputCurveArray& self, py::list& val) 
+            { self.vertexBuffers =  val.cast<std::vector<CUdeviceptr> >(); }
+            )
+        .def_property( "numVertices", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.numVertices; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.numVertices = val; }
+            )
+        .def_property( "vertexStrideInBytes", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.vertexStrideInBytes; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.vertexStrideInBytes = val; }
+            )
+        .def_property( "widthBuffers", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return py::cast( self.widthBuffers ); }, 
+            [](pyoptix::BuildInputCurveArray& self, py::list& val) 
+            { self.widthBuffers =  val.cast<std::vector<CUdeviceptr> >(); }
+            )
+        .def_property( "widthStrideInBytes", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.widthStrideInBytes; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.widthStrideInBytes = val; }
+            )
+        .def_property( "normalBuffers", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return py::cast( self.normalBuffers ); }, 
+            [](pyoptix::BuildInputCurveArray& self, py::list& val) 
+            { self.normalBuffers =  val.cast<std::vector<CUdeviceptr> >(); }
+            )
+        .def_property( "normalStrideInBytes", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.normalStrideInBytes; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.normalStrideInBytes = val; }
+            )
+        .def_property( "indexBuffer", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.indexBuffer; }, 
+            [](pyoptix::BuildInputCurveArray& self, CUdeviceptr val) 
+            { self.build_input.indexBuffer = val; }
+            )
+        .def_property( "indexStrideInBytes", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.indexStrideInBytes; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.indexStrideInBytes = val; }
+            )
+        .def_property( "flag", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.flag; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.flag = val; }
+            )
+        .def_property( "primitiveIndexOffset", 
+            []( const pyoptix::BuildInputCurveArray& self ) 
+            { return self.build_input.primitiveIndexOffset; }, 
+            [](pyoptix::BuildInputCurveArray& self, unsigned int val) 
+            { self.build_input.primitiveIndexOffset = val; }
+            )
+         ;
+
 
     py::class_<OptixAabb>(m, "Aabb")
         .def( py::init([]() { return std::unique_ptr<OptixAabb>(new OptixAabb{} ); } ) )

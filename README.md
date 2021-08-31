@@ -34,7 +34,7 @@ pip3 install --global-option build --global-option --debug .
 ```
 
 `<optix install dir>` should be the OptiX 7.3.0 install location - for example,
-`/home/gmarkall/numbadev/NVIDIA-OptiX-SDK-7.3.0-linux64-x86_64`.
+`/home/user/NVIDIA-OptiX-SDK-7.3.0-linux64-x86_64`.
 
 
 ## Running the example

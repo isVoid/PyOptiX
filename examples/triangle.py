@@ -70,8 +70,6 @@ def compile_cuda( cuda_file ):
         '-std=c++11',
         '-rdc',
         'true',
-        #'-IC:\\ProgramData\\NVIDIA Corporation\OptiX SDK 7.2.0\include',
-        #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
         '-I/usr/local/cuda/include',
         f'-I{optix.include_path}'
         ] )
@@ -399,7 +397,7 @@ def launch( pipeline, sbt, trav_handle ):
 
 
 def main():
-    triangle_ptx = compile_cuda( "examples/triangle.cu" )
+    triangle_ptx = compile_cuda( "triangle.cu" )
 
     init_optix()
 

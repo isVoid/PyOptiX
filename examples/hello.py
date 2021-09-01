@@ -109,7 +109,8 @@ def create_ctx():
             )
 
     # They can also be set and queried as properties on the struct
-    ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
+    if optix.version()[1] >= 2:
+        ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
 
     cu_ctx = 0 
     return optix.deviceContextCreate( cu_ctx, ctx_options )
@@ -139,20 +140,26 @@ def create_module( ctx, pipeline_options, hello_ptx ):
         'align'   : True
         } )
 
-    bound_value = array.array( 'i', [pix_width] )
-    bound_value_entry = optix.ModuleCompileBoundValueEntry(
-        pipelineParamOffsetInBytes = params_dtype.fields['image_width'][1],
-        boundValue  = bound_value,
-        annotation  = "my_bound_value"
+    if optix.version()[1] >= 2:
+        bound_value = array.array( 'i', [pix_width] )
+        bound_value_entry = optix.ModuleCompileBoundValueEntry(
+            pipelineParamOffsetInBytes = params_dtype.fields['image_width'][1],
+            boundValue  = bound_value,
+            annotation  = "my_bound_value"
         )
 
-
-    module_options = optix.ModuleCompileOptions(
-        maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
-        boundValues      = [ bound_value_entry ],
-        debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
-    )
+        module_options = optix.ModuleCompileOptions(
+            maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
+            boundValues      = [ bound_value_entry ],
+            debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+        )
+    else:
+        module_options = optix.ModuleCompileOptions(
+            maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
+            debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+        )
 
     module, log = ctx.moduleCreateFromPTX(
             module_options,

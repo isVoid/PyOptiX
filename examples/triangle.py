@@ -107,7 +107,8 @@ def create_ctx():
             )
 
     # They can also be set and queried as properties on the struct
-    ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
+    if optix.version()[1] >= 2:
+        ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
 
     cu_ctx = 0 
     return optix.deviceContextCreate( cu_ctx, ctx_options )

@@ -1180,7 +1180,8 @@ void convertPointerToTraversableHandle(
         )
     );
 }
- 
+
+#if OPTIX_VERSION >= 70300
 void denoiserCreate( 
        pyoptix::DeviceContext context,
        OptixDenoiserModelKind modelKind,
@@ -1197,7 +1198,23 @@ void denoiserCreate(
         )
     );
 }
- 
+#elif OPTIX_VERSION == 70200
+void denoiserCreate( 
+       pyoptix::DeviceContext context,
+       const OptixDenoiserOptions* options,
+       pyoptix::Denoiser* denoiser
+    )
+{
+    PYOPTIX_CHECK( 
+        optixDenoiserCreate(
+            context.deviceContext,
+            options,
+            &denoiser->denoiser
+        )
+    );
+}
+#endif
+
 /*
 void denoiserSetModel( 
        pyoptix::Denoiser denoiser,
@@ -1269,7 +1286,8 @@ void denoiserSetup(
         )
     );
 }
- 
+
+#if OPTIX_VERSION >= 70300
 void denoiserInvoke( 
        pyoptix::Denoiser              denoiser,
        uintptr_t                      stream,
@@ -1302,7 +1320,41 @@ void denoiserInvoke(
         )
     );
 }
- 
+#elif OPTIX_VERSION == 70200
+void denoiserInvoke(
+       pyoptix::Denoiser          denoiser,
+       uintptr_t                  stream,
+       const OptixDenoiserParams* params,
+       CUdeviceptr                denoiserState,
+       size_t                     denoiserStateSizeInBytes,
+       const OptixImage2D*        inputLayers,
+       unsigned int               numInputLayers,
+       unsigned int               inputOffsetX,
+       unsigned int               inputOffsetY,
+       const OptixImage2D*        outputLayer,
+       CUdeviceptr                scratch,
+       size_t                     scratchSizeInBytes
+    )
+{
+    PYOPTIX_CHECK( 
+        optixDenoiserInvoke(
+            denoiser.denoiser,
+            reinterpret_cast<CUstream>( stream ),
+            params,
+            denoiserState,
+            denoiserStateSizeInBytes,
+            inputLayers,
+            numInputLayers,
+            inputOffsetX,
+            inputOffsetY,
+	    outputLayer,
+            scratch,
+            scratchSizeInBytes
+        )
+    );
+}
+#endif
+
 void denoiserComputeIntensity( 
        pyoptix::Denoiser   denoiser,
        uintptr_t stream,
@@ -2206,13 +2258,19 @@ PYBIND11_MODULE( _optix, m )
         .def_readwrite( "format", &OptixImage2D::format )
         ;
 
+#if OPTIX_VERSION == 70300
     py::class_<OptixDenoiserOptions>(m, "DenoiserOptions")
         .def( py::init([]() { return std::unique_ptr<OptixDenoiserOptions>(new OptixDenoiserOptions{} ); } ) )
-        //.def_readwrite( "inputKind", &OptixDenoiserOptions::inputKind )
         .def_readwrite( "guideAlbedo", &OptixDenoiserOptions::guideAlbedo )
         .def_readwrite( "guideNormal", &OptixDenoiserOptions::guideNormal )
         ;
-
+#elif OPTIX_VERSION == 70200
+    py::class_<OptixDenoiserOptions>(m, "DenoiserOptions")
+        .def( py::init([]() { return std::unique_ptr<OptixDenoiserOptions>(new OptixDenoiserOptions{} ); } ) )
+        .def_readwrite( "inputKind", &OptixDenoiserOptions::inputKind )
+        ;
+#endif
+    
     py::class_<OptixDenoiserParams>(m, "DenoiserParams")
         .def( py::init([]() { return std::unique_ptr<OptixDenoiserParams>(new OptixDenoiserParams{} ); } ) )
         .def_readwrite( "denoiseAlpha", &OptixDenoiserParams::denoiseAlpha )

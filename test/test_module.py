@@ -48,7 +48,6 @@ class TestModule:
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_LEVEL_1
             assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_LINEINFO
-            assert not boundValues
             # optix.ModuleCompileOptions.boundValues is write-only
             with pytest.raises( AttributeError ):
                 print( mod_opts.boundValues )
@@ -57,7 +56,6 @@ class TestModule:
             assert mod_opts.maxRegisterCount == optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT
             assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_DEFAULT
             assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_DEFAULT
-            assert not boundValues
             mod_opts.maxRegisterCount = 64
             mod_opts.optLevel         = optix.COMPILE_OPTIMIZATION_LEVEL_1
             mod_opts.debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
@@ -65,7 +63,6 @@ class TestModule:
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_LEVEL_1
             assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_LINEINFO
-            assert len(boundValues) == 1
     else:
         def test_options( self ):
             mod_opts = optix.ModuleCompileOptions(

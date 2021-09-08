@@ -63,7 +63,7 @@ class TestModule:
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_LEVEL_1
             assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_LINEINFO
-    else:
+    elif optix.version()[1] == 1:
         def test_options( self ):
             mod_opts = optix.ModuleCompileOptions(
                 maxRegisterCount = 64,
@@ -84,6 +84,28 @@ class TestModule:
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_LEVEL_1
             assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_LINEINFO
+    else:
+        def test_options( self ):
+            mod_opts = optix.ModuleCompileOptions(
+                maxRegisterCount = 64,
+                optLevel         = optix.COMPILE_OPTIMIZATION_LEVEL_1,
+                debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+            )
+            assert mod_opts.maxRegisterCount == 64
+            assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_LEVEL_1
+            assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_LINEINFO
+
+            mod_opts = optix.ModuleCompileOptions()
+            assert mod_opts.maxRegisterCount == optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT
+            assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_DEFAULT
+            assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_LINEINFO
+            mod_opts.maxRegisterCount = 64
+            mod_opts.optLevel         = optix.COMPILE_OPTIMIZATION_LEVEL_1
+            mod_opts.debugLevel       = optix.COMPILE_DEBUG_LEVEL_FULL
+            assert mod_opts.maxRegisterCount == 64
+            assert mod_opts.optLevel         == optix.COMPILE_OPTIMIZATION_LEVEL_1
+            assert mod_opts.debugLevel       == optix.COMPILE_DEBUG_LEVEL_FULL
+
 
 
     def test_create_destroy( self ):
@@ -102,22 +124,22 @@ class TestModule:
         mod.destroy()
         ctx.destroy()
 
-
-    def test_builtin_is_module_get( self ):
-        ctx = tutil.create_default_ctx();
-        module_opts     = optix.ModuleCompileOptions()
-        pipeline_opts   = optix.PipelineCompileOptions()
-        builtin_is_opts = optix.BuiltinISOptions()
-        builtin_is_opts.builtinISModuleType = optix.PRIMITIVE_TYPE_TRIANGLE
-
-        is_mod = ctx.builtinISModuleGet(
+    if optix.version()[1] > 0:
+        def test_builtin_is_module_get( self ):
+            ctx = tutil.create_default_ctx();
+            module_opts     = optix.ModuleCompileOptions()
+            pipeline_opts   = optix.PipelineCompileOptions()
+            builtin_is_opts = optix.BuiltinISOptions()
+            builtin_is_opts.builtinISModuleType = optix.PRIMITIVE_TYPE_TRIANGLE
+            
+            is_mod = ctx.builtinISModuleGet(
                 module_opts,
                 pipeline_opts,
                 builtin_is_opts
-                )
-        assert type( is_mod ) is optix.Module
-        is_mod.destroy()
-        ctx.destroy()
+            )
+            assert type( is_mod ) is optix.Module
+            is_mod.destroy()
+            ctx.destroy()
 
       
 

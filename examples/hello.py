@@ -73,6 +73,7 @@ def compile_cuda( cuda_file ):
         'true',
         #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
         '-I/usr/local/cuda/include',
+        '-I/usr/include/linux/',
         f'-I{optix.include_path}'
         ] )
     return ptx

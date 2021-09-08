@@ -71,6 +71,7 @@ def compile_cuda( cuda_file ):
         '-rdc',
         'true',
         '-I/usr/local/cuda/include',
+        '-I/usr/include/linux/',
         f'-I{optix.include_path}'
         ] )
     return ptx
@@ -156,17 +157,25 @@ def create_accel( ctx ):
 
 
 def set_pipeline_options():
-    return optix.PipelineCompileOptions(
-        usesMotionBlur         = False,
-        traversableGraphFlags  = 
-            int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
-        numPayloadValues       = 3,
-        numAttributeValues     = 3,
-        exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
-        pipelineLaunchParamsVariableName = "params",
-        usesPrimitiveTypeFlags = optix.PRIMITIVE_TYPE_FLAGS_TRIANGLE
+    if optix.version()[1] >= 2:
+        return optix.PipelineCompileOptions(
+            usesMotionBlur         = False,
+            traversableGraphFlags  = int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
+            numPayloadValues       = 3,
+            numAttributeValues     = 3,
+            exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
+            pipelineLaunchParamsVariableName = "params",
+            usesPrimitiveTypeFlags = optix.PRIMITIVE_TYPE_FLAGS_TRIANGLE
         )
-
+    else:
+        return optix.PipelineCompileOptions(
+            usesMotionBlur         = False,
+            traversableGraphFlags  = int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
+            numPayloadValues       = 3,
+            numAttributeValues     = 3,
+            exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
+            pipelineLaunchParamsVariableName = "params"
+        )
 
 def create_module( ctx, pipeline_options, triangle_ptx ):
     print( "Creating optix module ..." )

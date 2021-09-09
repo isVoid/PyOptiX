@@ -63,17 +63,24 @@ def compile_cuda( cuda_file ):
         src = f.read()
     from pynvrtc.compiler import Program
     prog = Program( src.decode(), cuda_file )
-    ptx  = prog.compile( [
+    compile_options = [
         '-use_fast_math', 
         '-lineinfo',
         '-default-device',
         '-std=c++11',
         '-rdc',
         'true',
-        '-I/usr/local/cuda/include',
-        '-I/usr/include/linux/',
+        f'-I{optix.cuda_tk_path}',
         f'-I{optix.include_path}'
-        ] )
+    ]
+    # Optix 7.0 compiles need path to system stddef.h
+    # the value of optix.stddef_path is compiled in constant. When building
+    # the module, the value can be specified via an environment variable, e.g.
+    #   export PYOPTIX_STDDEF_DIR="/usr/include/linux"
+    if (optix.version()[1] == 0):
+        compile_options.append( f'-I{optix.stddef_path}' )
+
+    ptx  = prog.compile( compile_options )
     return ptx
 
 

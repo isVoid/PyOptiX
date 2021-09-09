@@ -6,8 +6,7 @@ Python bindings for OptiX 7.
 
 ### OptiX SDK
 
-Install the [OptiX 7.3.0
-SDK](https://developer.nvidia.com/optix/downloads/7.3.0/linux64).
+Install any [OptiX 7.x SDK](https://developer.nvidia.com/optix/downloads/7.3.0/linux64). 
 
 
 ### Conda environment
@@ -32,10 +31,14 @@ Build and install PyOptiX into the environment with:
 export PYOPTIX_CMAKE_ARGS="-DOptiX_INSTALL_DIR=<optix install dir>"
 pip3 install --global-option build --global-option --debug .
 ```
-
 `<optix install dir>` should be the OptiX 7.3.0 install location - for example,
 `/home/user/NVIDIA-OptiX-SDK-7.3.0-linux64-x86_64`.
 
+When compiling against an Optix 7.0 SDK build also set a path variable pointing
+to the system's stddef.h location. E.g.
+```
+export PYOPTIX_STDDEF_DIR="/usr/include/linux"
+```
 
 ## Running the example
 

@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#define NOMINMAX 
 #include <optix.h>
 #include <optix_stubs.h>
 #include <optix_function_table_definition.h>
@@ -402,7 +403,7 @@ struct ModuleCompileOptions
 };
 #endif
 
-#if OPTIX_VERSION < 70000
+#if OPTIX_VERSION > 70000
 struct BuiltinISOptions
 {
     OptixBuiltinISOptions options;

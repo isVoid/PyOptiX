@@ -402,7 +402,7 @@ struct ModuleCompileOptions
 };
 #endif
 
-#if OPTIX_VERSION < 70000
+#if OPTIX_VERSION > 70000
 struct BuiltinISOptions
 {
     OptixBuiltinISOptions options;

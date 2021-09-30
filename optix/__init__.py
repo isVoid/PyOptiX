@@ -1,2 +1,0 @@
-from ._optix import *
-

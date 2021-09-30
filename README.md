@@ -34,6 +34,11 @@ pip3 install --global-option build --global-option --debug .
 `<optix install dir>` should be the OptiX 7.3.0 install location - for example,
 `/home/user/NVIDIA-OptiX-SDK-7.3.0-linux64-x86_64`.
 
+For windows the environment variable can be set like this:
+```
+set PYOPTIX_CMAKE_ARGS=-DOptix_INSTALL_DIR=C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.0.0
+```
+
 When compiling against an Optix 7.0 SDK build also set a path variable pointing
 to the system's stddef.h location. E.g.
 ```

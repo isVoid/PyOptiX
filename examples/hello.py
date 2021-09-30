@@ -9,6 +9,7 @@ import numpy as np    # Packing of structures in C-compatible format
 import array
 import ctypes         # C interop helpers
 from PIL import Image # Image IO
+from pynvrtc.compiler import Program
 
 import path_util
 
@@ -64,8 +65,12 @@ def array_to_device_memory( numpy_array, stream=cp.cuda.Stream() ):
 def compile_cuda( cuda_file ):
     with open( cuda_file, 'rb' ) as f:
         src = f.read()
-    from pynvrtc.compiler import Program
-    prog = Program( src.decode(), cuda_file )
+    nvrtc_dll = os.environ.get('NVRTC_DLL')
+    if nvrtc_dll is None:
+        nvrtc_dll = ''
+    print("NVRTC_DLL = {}".format(nvrtc_dll))
+    prog = Program( src.decode(), cuda_file,
+                    lib_name= nvrtc_dll )
     compile_options = [
         '-use_fast_math', 
         '-lineinfo',

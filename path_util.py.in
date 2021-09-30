@@ -1,0 +1,7 @@
+import os
+
+print("__file__ = {}".format(__file__))
+include_path = "${OptiX_INCLUDE}"
+cuda_tk_path = "${CUDA_INCLUDE_DIRS}"
+stddef_path = "${OptiX_STDDEF_DIR}"
+

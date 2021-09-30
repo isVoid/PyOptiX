@@ -17,8 +17,7 @@ include_directories(
 configure_file("${CMAKE_SOURCE_DIR}/path_util.py.in" "${CMAKE_SOURCE_DIR}/examples/path_util.py")
 
 add_subdirectory(pybind11)
-add_subdirectory(optix)
-
+#add_subdirectory(optix)
 
 pybind11_add_module(optix src/main.cpp)
 target_link_libraries( optix PRIVATE
@@ -27,4 +26,11 @@ target_link_libraries( optix PRIVATE
 target_compile_features( optix PRIVATE 
     cxx_std_17
     )
+
+add_custom_command(
+    TARGET optix POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${OptiX_INCLUDE}
+    $<TARGET_FILE_DIR:optix>/include
+)
 

@@ -78,7 +78,7 @@ setup(
     author_email='kmorley@nvidia.com',
     description='Python bindings for NVIDIA OptiX',
     long_description='',
-    ext_modules=[CMakeExtension('optix._optix')],
+    ext_modules=[CMakeExtension('optix')],
     cmdclass=dict(build_ext=CMakeBuild),
     packages=['optix'],
     install_requires=['pynvrtc'],

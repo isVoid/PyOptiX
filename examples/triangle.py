@@ -2,6 +2,7 @@
 
 
 import optix
+import os
 import cupy  as cp    # CUDA bindings
 import numpy as np    # Packing of structures in C-compatible format
 
@@ -416,7 +417,8 @@ def launch( pipeline, sbt, trav_handle ):
 
 
 def main():
-    triangle_ptx = compile_cuda( "triangle.cu" )
+    triangle_cu = os.path.join(os.path.dirname(__file__), 'triangle.cu')
+    triangle_ptx = compile_cuda( triangle_cu )
 
     init_optix()
 

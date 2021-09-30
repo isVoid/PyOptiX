@@ -12,6 +12,7 @@ from PIL import Image # Image IO
 
 import path_util
 
+
 #-------------------------------------------------------------------------------
 #
 # Util 
@@ -83,7 +84,7 @@ def compile_cuda( cuda_file ):
     # the module, the value can be specified via an environment variable, e.g.
     #   export PYOPTIX_STDDEF_DIR="/usr/include/linux"
     if (optix.version()[1] == 0):
-        compile_options.append( f'-I{optix.stddef_path}' )
+        compile_options.append( f'-I{path_util.stddef_path}' )
 
     ptx  = prog.compile( compile_options )
     return ptx

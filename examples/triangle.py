@@ -9,6 +9,8 @@ import array
 import ctypes         # C interop helpers
 from PIL import Image, ImageOps # Image IO
 
+import path_util
+
 
 #-------------------------------------------------------------------------------
 #
@@ -70,15 +72,15 @@ def compile_cuda( cuda_file ):
         '-std=c++11',
         '-rdc',
         'true',
-        f'-I{optix.cuda_tk_path}',
-        f'-I{optix.include_path}'
+        f'-I{path_util.cuda_tk_path}',
+        f'-I{path_util.include_path}'
     ]
     # Optix 7.0 compiles need path to system stddef.h
     # the value of optix.stddef_path is compiled in constant. When building
     # the module, the value can be specified via an environment variable, e.g.
     #   export PYOPTIX_STDDEF_DIR="/usr/include/linux"
     if (optix.version()[1] == 0):
-        compile_options.append( f'-I{optix.stddef_path}' )
+        compile_options.append( f'-I{path_util.stddef_path}' )
 
     ptx  = prog.compile( compile_options )
     return ptx

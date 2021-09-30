@@ -23,7 +23,7 @@ Activate the environment:
 conda activate pyoptix
 ```
 
-### PyOptiX installation
+### PyOptiX Installation
 
 Build and install PyOptiX into the environment with:
 
@@ -45,7 +45,7 @@ to the system's stddef.h location. E.g.
 export PYOPTIX_STDDEF_DIR="/usr/include/linux"
 ```
 
-## Running the example
+## Running the Examples
 
 The example can be run from the examples directory with:
 
@@ -55,3 +55,11 @@ python hello.py
 ```
 
 If the example runs successfully, a green square will be rendered.
+
+## Running the Test Suite
+
+Test tests are using `pytest` and can be run from the test directory like this:
+```
+cd test
+python -m pytest
+```

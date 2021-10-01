@@ -63,15 +63,15 @@ cd optix
 python setup.py install
 ```
 
-When compiling against an Optix 7.0 SDK build also set a path variable pointing
-to the system's stddef.h location. E.g.
+When compiling against an Optix 7.0 SDK an additional environment variable needs to be set
+containing a path to the system's stddef.h location. E.g.
 ```
 export PYOPTIX_STDDEF_DIR="/usr/include/linux"
 ```
 
 ## Running the Examples
 
-Examples can be run from the examples directory with:
+Run the `hello` sample:
 ```
 cd examples
 python hello.py

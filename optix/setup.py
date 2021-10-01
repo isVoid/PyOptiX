@@ -80,7 +80,5 @@ setup(
     long_description='',
     ext_modules=[CMakeExtension('optix')],
     cmdclass=dict(build_ext=CMakeBuild),
-    packages=['optix'],
-    install_requires=['pynvrtc'],
     zip_safe=False,
 )

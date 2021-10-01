@@ -19,7 +19,7 @@ configure_file("${CMAKE_SOURCE_DIR}/path_util.py.in" "${CMAKE_SOURCE_DIR}/exampl
 add_subdirectory(pybind11)
 #add_subdirectory(optix)
 
-pybind11_add_module(optix src/main.cpp)
+pybind11_add_module(optix main.cpp)
 target_link_libraries( optix PRIVATE
 	"${CUDA_LIBRARIES}"
 	)

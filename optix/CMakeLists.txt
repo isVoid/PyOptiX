@@ -14,7 +14,7 @@ include_directories(
     "${CUDA_INCLUDE_DIRS}"
     )
 
-configure_file("${CMAKE_SOURCE_DIR}/path_util.py.in" "${CMAKE_SOURCE_DIR}/examples/path_util.py")
+configure_file("${CMAKE_SOURCE_DIR}/path_util.py.in" "${CMAKE_SOURCE_DIR}/../examples/path_util.py")
 
 add_subdirectory(pybind11)
 #add_subdirectory(optix)

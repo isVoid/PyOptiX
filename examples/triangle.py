@@ -426,8 +426,6 @@ def main():
     triangle_cu = os.path.join(os.path.dirname(__file__), 'triangle.cu')
     triangle_ptx = compile_cuda( triangle_cu )
 
-    init_optix()
-
     ctx              = create_ctx()
     gas_handle, d_gas_output_buffer = create_accel(ctx)
     pipeline_options = set_pipeline_options()

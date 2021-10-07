@@ -344,14 +344,13 @@ def launch( pipeline, sbt ):
 
 
 def main():
+    ctx              = create_ctx()
+
     hello_cu = os.path.join(os.path.dirname(__file__), 'hello.cu')
     hello_ptx = compile_cuda(hello_cu)
-
-    init_optix()
-
-    ctx              = create_ctx()
     pipeline_options = set_pipeline_options()
     module           = create_module( ctx, pipeline_options, hello_ptx )
+
     raygen_prog_group, miss_prog_group = create_program_groups( ctx, module )
     pipeline         = create_pipeline( ctx, raygen_prog_group, pipeline_options )
     sbt              = create_sbt( raygen_prog_group, miss_prog_group ) 

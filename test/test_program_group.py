@@ -4,6 +4,8 @@ import cupy as cp
 import array
 import pytest
 
+import sample_ptx
+
 
 class TestProgramGroupOptions:
     def test_constructor(self):
@@ -11,12 +13,13 @@ class TestProgramGroupOptions:
         assert type(pgo) is ox.ProgramGroupOptions
         # ProgramGroupOptions is an empty data type. There is nothing to test here (yet).
 
+
 class TestProgramGroupBase:
     def setup_method(self):
         self.ctx = ox.deviceContextCreate(0, ox.DeviceContextOptions())
         self.mod, log = self.ctx.moduleCreateFromPTX(ox.ModuleCompileOptions(),
                                                      ox.PipelineCompileOptions(),
-                                                     tutil.ptx_string)
+                                                     sample_ptx.sample_ptx)
 
     def teardown_method(self):
         self.mod.destroy()

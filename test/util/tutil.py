@@ -388,13 +388,7 @@ def log_callback( level, tag, mssg ):
     print( "[{:>2}][{:>12}]: {}".format( level, tag, mssg ) )
 
 
-def optix_init():
-    cp.cuda.runtime.free( 0 )
-    optix.init()
-
-
 def create_default_ctx():
-    optix_init()
     ctx_options = optix.DeviceContextOptions()
 
     cu_ctx = 0 
@@ -402,7 +396,6 @@ def create_default_ctx():
         
 
 def create_default_module():
-
     ctx = create_default_ctx();
     module_opts   = optix.ModuleCompileOptions()
     pipeline_opts = optix.PipelineCompileOptions()

@@ -1607,12 +1607,14 @@ PYBIND11_MODULE( optix, m )
 
     )pbdoc";
 
+    cudaFree(0); 
+    pyoptix::init();
+    
     //---------------------------------------------------------------------------
     //
-    // Module methods
+    // Module Methods
     //
     //---------------------------------------------------------------------------
-    m.def( "init", &pyoptix::init);
     m.def( "version", &pyoptix::version);
     m.def( "deviceContextCreate", &pyoptix::deviceContextCreate);
     m.def( "getErrorName", &pyoptix::getErrorName );

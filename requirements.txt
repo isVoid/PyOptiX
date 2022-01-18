@@ -1,7 +1,5 @@
-cmake
 cupy
-fastrlock
 numpy
 Pillow
-pybind11
 pynvrtc
+pytest

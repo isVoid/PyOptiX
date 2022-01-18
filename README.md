@@ -8,16 +8,30 @@ Python bindings for OptiX 7.
 Install any [OptiX 7.x SDK](https://developer.nvidia.com/optix/downloads/7.3.0/linux64). 
 
 ### Clone Repository
+via ssh:
 ```
 git clone --recurse-submodules git@github.com:keithroe/PyOptiX.git
 ```
+or htmls:
+```
+git clone --recurse-submodules https://github.com/keithroe/PyOptiX.git 
+```
+
 
 ### Dependencies
-Building the optix wrapper module, running examples or tests depend on the modules mentioned in
-`requirements.txt` in the project's base directory:
-```
-cmake, cupy, fastrlock, numpy, Pillow, pybind11, pynvrtc, pytest
-```
+OptiX python module build requirements:
+* [cmake](https://cmake.org/)
+* [pip](https://pypi.org/project/pip/)
+
+To run the PyOptiX examples or tests the python modules specified in 
+`PyOptiX/requirements.txt` must be installed:
+* pytest
+* cupy
+* numpy
+* Pillow
+* pynvrtc
+
+### Virtual Environment
 In most cases, it makes sense to setup a python environment.
 
 #### `venv` Virtual Environment
@@ -34,7 +48,7 @@ pip install -r requirements.txt
 #### Conda Environment
 Create an environment containing pre-requisites:
 ```
-conda create -n pyoptix python numpy conda-forge::cupy pybind11 pillow cmake
+conda create -n pyoptix python numpy conda-forge::cupy pillow pytest
 ```
 Activate the environment:
 ```

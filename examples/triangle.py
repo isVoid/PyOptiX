@@ -2,12 +2,16 @@
 
 
 import optix
+import os
 import cupy  as cp    # CUDA bindings
 import numpy as np    # Packing of structures in C-compatible format
 
 import array
 import ctypes         # C interop helpers
 from PIL import Image, ImageOps # Image IO
+from pynvrtc.compiler import Program
+
+import path_util
 
 
 #-------------------------------------------------------------------------------
@@ -61,20 +65,31 @@ def array_to_device_memory( numpy_array, stream=cp.cuda.Stream() ):
 def compile_cuda( cuda_file ):
     with open( cuda_file, 'rb' ) as f:
         src = f.read()
-    from pynvrtc.compiler import Program
-    prog = Program( src.decode(), cuda_file )
-    ptx  = prog.compile( [
+    nvrtc_dll = os.environ.get('NVRTC_DLL')
+    if nvrtc_dll is None:
+        nvrtc_dll = ''
+    print("NVRTC_DLL = {}".format(nvrtc_dll))
+    prog = Program( src.decode(), cuda_file,
+                    lib_name= nvrtc_dll )
+    compile_options = [
         '-use_fast_math', 
         '-lineinfo',
         '-default-device',
         '-std=c++11',
         '-rdc',
         'true',
-        #'-IC:\\ProgramData\\NVIDIA Corporation\OptiX SDK 7.2.0\include',
         #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
-        '-I/usr/local/cuda/include',
-        '-I/home/kmorley/Code/support/NVIDIA-OptiX-SDK-7.3.0-linux64-x86_64/include/'
-        ] )
+        f'-I{path_util.cuda_tk_path}',
+        f'-I{path_util.include_path}'
+    ]
+    # Optix 7.0 compiles need path to system stddef.h
+    # the value of optix.stddef_path is compiled in constant. When building
+    # the module, the value can be specified via an environment variable, e.g.
+    #   export PYOPTIX_STDDEF_DIR="/usr/include/linux"
+    if (optix.version()[1] == 0):
+        compile_options.append( f'-I{path_util.stddef_path}' )
+
+    ptx  = prog.compile( compile_options )
     return ptx
 
 
@@ -109,7 +124,8 @@ def create_ctx():
             )
 
     # They can also be set and queried as properties on the struct
-    ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
+    if optix.version()[1] >= 2:
+        ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
 
     cu_ctx = 0 
     return optix.deviceContextCreate( cu_ctx, ctx_options )
@@ -157,17 +173,25 @@ def create_accel( ctx ):
 
 
 def set_pipeline_options():
-    return optix.PipelineCompileOptions(
-        usesMotionBlur         = False,
-        traversableGraphFlags  = 
-            int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
-        numPayloadValues       = 3,
-        numAttributeValues     = 3,
-        exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
-        pipelineLaunchParamsVariableName = "params",
-        usesPrimitiveTypeFlags = optix.PRIMITIVE_TYPE_FLAGS_TRIANGLE
+    if optix.version()[1] >= 2:
+        return optix.PipelineCompileOptions(
+            usesMotionBlur         = False,
+            traversableGraphFlags  = int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
+            numPayloadValues       = 3,
+            numAttributeValues     = 3,
+            exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
+            pipelineLaunchParamsVariableName = "params",
+            usesPrimitiveTypeFlags = optix.PRIMITIVE_TYPE_FLAGS_TRIANGLE
         )
-
+    else:
+        return optix.PipelineCompileOptions(
+            usesMotionBlur         = False,
+            traversableGraphFlags  = int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
+            numPayloadValues       = 3,
+            numAttributeValues     = 3,
+            exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
+            pipelineLaunchParamsVariableName = "params"
+        )
 
 def create_module( ctx, pipeline_options, triangle_ptx ):
     print( "Creating optix module ..." )
@@ -399,9 +423,8 @@ def launch( pipeline, sbt, trav_handle ):
 
 
 def main():
-    triangle_ptx = compile_cuda( "examples/triangle.cu" )
-
-    init_optix()
+    triangle_cu = os.path.join(os.path.dirname(__file__), 'triangle.cu')
+    triangle_ptx = compile_cuda( triangle_cu )
 
     ctx              = create_ctx()
     gas_handle, d_gas_output_buffer = create_accel(ctx)

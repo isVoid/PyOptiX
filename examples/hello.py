@@ -9,6 +9,9 @@ import numpy as np    # Packing of structures in C-compatible format
 import array
 import ctypes         # C interop helpers
 from PIL import Image # Image IO
+from pynvrtc.compiler import Program
+
+import path_util
 
 
 #-------------------------------------------------------------------------------
@@ -62,9 +65,13 @@ def array_to_device_memory( numpy_array, stream=cp.cuda.Stream() ):
 def compile_cuda( cuda_file ):
     with open( cuda_file, 'rb' ) as f:
         src = f.read()
-    from pynvrtc.compiler import Program
-    prog = Program( src.decode(), cuda_file )
-    ptx  = prog.compile( [
+    nvrtc_dll = os.environ.get('NVRTC_DLL')
+    if nvrtc_dll is None:
+        nvrtc_dll = ''
+    print("NVRTC_DLL = {}".format(nvrtc_dll))
+    prog = Program( src.decode(), cuda_file,
+                    lib_name= nvrtc_dll )
+    compile_options = [
         '-use_fast_math', 
         '-lineinfo',
         '-default-device',
@@ -72,9 +79,19 @@ def compile_cuda( cuda_file ):
         '-rdc',
         'true',
         #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
-        '-I/usr/local/cuda/include',
-        f'-I{optix.include_path}'
-        ] )
+        f'-I{path_util.cuda_tk_path}',
+        f'-I{path_util.include_path}'
+    ]
+
+    print("include_path = {}".format(path_util.include_path))
+    # Optix 7.0 compiles need path to system stddef.h
+    # the value of optix.stddef_path is compiled in constant. When building
+    # the module, the value can be specified via an environment variable, e.g.
+    #   export PYOPTIX_STDDEF_DIR="/usr/include/linux"
+    if (optix.version()[1] == 0):
+        compile_options.append( f'-I{path_util.stddef_path}' )
+
+    ptx  = prog.compile( compile_options )
     return ptx
 
 
@@ -109,7 +126,8 @@ def create_ctx():
             )
 
     # They can also be set and queried as properties on the struct
-    ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
+    if optix.version()[1] >= 2:
+        ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
 
     cu_ctx = 0 
     return optix.deviceContextCreate( cu_ctx, ctx_options )
@@ -139,20 +157,26 @@ def create_module( ctx, pipeline_options, hello_ptx ):
         'align'   : True
         } )
 
-    bound_value = array.array( 'i', [pix_width] )
-    bound_value_entry = optix.ModuleCompileBoundValueEntry(
-        pipelineParamOffsetInBytes = params_dtype.fields['image_width'][1],
-        boundValue  = bound_value,
-        annotation  = "my_bound_value"
+    if optix.version()[1] >= 2:
+        bound_value = array.array( 'i', [pix_width] )
+        bound_value_entry = optix.ModuleCompileBoundValueEntry(
+            pipelineParamOffsetInBytes = params_dtype.fields['image_width'][1],
+            boundValue  = bound_value,
+            annotation  = "my_bound_value"
         )
 
-
-    module_options = optix.ModuleCompileOptions(
-        maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
-        boundValues      = [ bound_value_entry ],
-        debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
-    )
+        module_options = optix.ModuleCompileOptions(
+            maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
+            boundValues      = [ bound_value_entry ],
+            debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+        )
+    else:
+        module_options = optix.ModuleCompileOptions(
+            maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+            optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
+            debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+        )
 
     module, log = ctx.moduleCreateFromPTX(
             module_options,
@@ -320,14 +344,13 @@ def launch( pipeline, sbt ):
 
 
 def main():
+    ctx              = create_ctx()
+
     hello_cu = os.path.join(os.path.dirname(__file__), 'hello.cu')
     hello_ptx = compile_cuda(hello_cu)
-
-    init_optix()
-
-    ctx              = create_ctx()
     pipeline_options = set_pipeline_options()
     module           = create_module( ctx, pipeline_options, hello_ptx )
+
     raygen_prog_group, miss_prog_group = create_program_groups( ctx, module )
     pipeline         = create_pipeline( ctx, raygen_prog_group, pipeline_options )
     sbt              = create_sbt( raygen_prog_group, miss_prog_group ) 

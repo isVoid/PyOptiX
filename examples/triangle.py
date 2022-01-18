@@ -200,7 +200,7 @@ def create_module( ctx, pipeline_options, triangle_ptx ):
     module_options = optix.ModuleCompileOptions(
         maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
-        debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+        debugLevel       = optix.COMPILE_DEBUG_LEVEL_DEFAULT
     )
 
     module, log = ctx.moduleCreateFromPTX(
@@ -439,8 +439,8 @@ def main():
 
     pix = pix.reshape( ( pix_height, pix_width, 4 ) )     # PIL expects [ y, x ] resolution
     img = ImageOps.flip( Image.fromarray( pix, 'RGBA' ) ) # PIL expects y = 0 at bottom
-    img.save( 'my.png' )
     img.show()
+    img.save( 'my.png' )
 
 
 if __name__ == "__main__":

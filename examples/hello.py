@@ -169,13 +169,13 @@ def create_module( ctx, pipeline_options, hello_ptx ):
             maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
             boundValues      = [ bound_value_entry ],
-            debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+            debugLevel       = optix.COMPILE_DEBUG_LEVEL_DEFAULT
         )
     else:
         module_options = optix.ModuleCompileOptions(
             maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
             optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
-            debugLevel       = optix.COMPILE_DEBUG_LEVEL_LINEINFO
+            debugLevel       = optix.COMPILE_DEBUG_LEVEL_DEFAULT
         )
 
     module, log = ctx.moduleCreateFromPTX(

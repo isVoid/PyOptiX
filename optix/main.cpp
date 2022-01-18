@@ -375,6 +375,8 @@ struct ModuleCompileOptions
         options.optLevel         = optLevel;
         options.debugLevel       = debugLevel;
 
+        options.numPayloadTypes = 0; // TODO
+        options.payloadTypes = nullptr; // TODO
         setBoundValues( std::move( bound_values ) );
     }
 
@@ -402,7 +404,7 @@ struct ModuleCompileOptions
         options.numBoundValues = static_cast<uint32_t>( boundValues.size() );
     }
 
-    OptixModuleCompileOptions options;
+    OptixModuleCompileOptions options{};
     std::vector<pyoptix::ModuleCompileBoundValueEntry> pyboundValues;
     std::vector<OptixModuleCompileBoundValueEntry>     boundValues;
 };
@@ -420,7 +422,7 @@ struct ModuleCompileOptions
         options.debugLevel       = debugLevel;
     }
 
-    OptixModuleCompileOptions options;
+    OptixModuleCompileOptions options{};
 };
 #endif
 
@@ -1812,7 +1814,9 @@ PYBIND11_MODULE( optix, m )
         .value( "INSTANCE_FLAG_FLIP_TRIANGLE_FACING", OPTIX_INSTANCE_FLAG_FLIP_TRIANGLE_FACING )
         .value( "INSTANCE_FLAG_DISABLE_ANYHIT", OPTIX_INSTANCE_FLAG_DISABLE_ANYHIT )
         .value( "INSTANCE_FLAG_ENFORCE_ANYHIT", OPTIX_INSTANCE_FLAG_ENFORCE_ANYHIT )
+#if OPTIX_VERSION < 70400
         .value( "INSTANCE_FLAG_DISABLE_TRANSFORM", OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM )
+#endif
         .export_values();
 
     py::enum_<OptixBuildFlags>(m, "BuildFlags", py::arithmetic())
@@ -1901,11 +1905,17 @@ PYBIND11_MODULE( optix, m )
 
     py::enum_<OptixCompileDebugLevel>(m, "CompileDebugLevel", py::arithmetic())
 #if OPTIX_VERSION > 70000
-        .value( "COMPILE_DEBUG_LEVEL_DEFAULT", OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT )
+        .value( "COMPILE_DEBUG_LEVEL_DEFAULT",  OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT  )
 #endif
-        .value( "COMPILE_DEBUG_LEVEL_NONE", OPTIX_COMPILE_DEBUG_LEVEL_NONE )
+        .value( "COMPILE_DEBUG_LEVEL_NONE",     OPTIX_COMPILE_DEBUG_LEVEL_NONE     )
+#if OPTIX_VERSION < 70400
         .value( "COMPILE_DEBUG_LEVEL_LINEINFO", OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO )
-        .value( "COMPILE_DEBUG_LEVEL_FULL", OPTIX_COMPILE_DEBUG_LEVEL_FULL )
+        .value( "COMPILE_DEBUG_LEVEL_FULL",     OPTIX_COMPILE_DEBUG_LEVEL_FULL     )
+#else
+        .value( "COMPILE_DEBUG_LEVEL_MINIMAL",  OPTIX_COMPILE_DEBUG_LEVEL_MINIMAL  )
+        .value( "COMPILE_DEBUG_LEVEL_MODERATE", OPTIX_COMPILE_DEBUG_LEVEL_MODERATE )
+        .value( "COMPILE_DEBUG_LEVEL_FULL",     OPTIX_COMPILE_DEBUG_LEVEL_FULL     )
+#endif
         .export_values();
 
     /*

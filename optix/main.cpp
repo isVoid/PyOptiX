@@ -40,6 +40,29 @@ namespace py = pybind11;
     } while( 0 )
 
 
+#define COMMA ,
+
+#if OPTIX_VERSION >= 70100
+#    define IF_OPTIX71( code ) code
+#    define IF_OPTIX71_ELSE( code0, code1 ) code0
+#else
+#    define IF_OPTIX71( code ) 
+#    define IF_OPTIX71_ELSE( code0, code1 ) code1
+#endif
+
+#if OPTIX_VERSION >= 70200
+#    define IF_OPTIX72( code ) code
+#else
+#    define IF_OPTIX72( code ) 
+#endif
+
+#if OPTIX_VERSION >= 70400
+#    define IF_OPTIX74( code ) code
+#else
+#    define IF_OPTIX74( code ) 
+#endif
+
+
 namespace pyoptix
 {
 
@@ -99,37 +122,12 @@ bool operator==( const Denoiser& a, const Denoiser& b) { return a.denoiser== b.d
 //
 //------------------------------------------------------------------------------
 
-#if OPTIX_VERSION >= 70200
-struct DeviceContextOptions
-{
-    DeviceContextOptions(
-       py::object log_callback_function,
-       int32_t    log_callback_level,
-       OptixDeviceContextValidationMode validation_mode
-       )
-    {
-        logCallbackFunction         = log_callback_function;
-        if( !logCallbackFunction.is_none() )
-        {
-            options.logCallbackFunction = pyoptix::context_log_cb;
-            options.logCallbackData     = logCallbackFunction.ptr();
-        }
-
-        options.logCallbackLevel    = log_callback_level;
-        options.validationMode      = validation_mode;
-    }
-
-
-    // Log callback needs additional backing
-    py::object logCallbackFunction;
-    OptixDeviceContextOptions options;
-};
-#elif OPTIX_VERSION <= 70100
 struct DeviceContextOptions
 {
     DeviceContextOptions(
        py::object log_callback_function,
        int32_t    log_callback_level
+       IF_OPTIX72( COMMA OptixDeviceContextValidationMode validation_mode )
        )
     {
         logCallbackFunction         = log_callback_function;
@@ -140,6 +138,7 @@ struct DeviceContextOptions
         }
 
         options.logCallbackLevel    = log_callback_level;
+        IF_OPTIX72( options.validationMode      = validation_mode; )
     }
 
 
@@ -147,7 +146,7 @@ struct DeviceContextOptions
     py::object logCallbackFunction;
     OptixDeviceContextOptions options;
 };
-#endif
+
 
 struct BuildInputTriangleArray
 {
@@ -166,9 +165,7 @@ struct BuildInputTriangleArray
         unsigned int           sbtIndexOffsetSizeInBytes,
         unsigned int           sbtIndexOffsetStrideInBytes,
         unsigned int           primitiveIndexOffset
-#if OPTIX_VERSION > 70000
-        , OptixTransformFormat   transformFormat
-#endif
+        IF_OPTIX71( COMMA OptixTransformFormat   transformFormat )
         )
     {
 	memset(&build_input, 0, sizeof(OptixBuildInputTriangleArray));
@@ -187,9 +184,9 @@ struct BuildInputTriangleArray
         build_input.sbtIndexOffsetStrideInBytes = sbtIndexOffsetStrideInBytes;
         build_input.primitiveIndexOffset        = primitiveIndexOffset;
         build_input.numSbtRecords               = numSbtRecords;
-#if OPTIX_VERSION > 70000
+        IF_OPTIX71( 
         build_input.transformFormat             = transformFormat;
-#endif
+        )
     }
 
     void sync()
@@ -205,7 +202,7 @@ struct BuildInputTriangleArray
 };
 
 
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION > 70100
 struct BuildInputCurveArray
 {
     BuildInputCurveArray(
@@ -254,9 +251,7 @@ struct PipelineCompileOptions
         int32_t   numAttributeValues,
         uint32_t  exceptionFlags,
         const char* pipelineLaunchParamsVariableName_
-#if OPTIX_VERSION > 70000	
-        , int32_t  usesPrimitiveTypeFlags
-#endif
+        IF_OPTIX71( COMMA int32_t  usesPrimitiveTypeFlags )
         )
     {
         options.usesMotionBlur         = usesMotionBlur;
@@ -264,9 +259,9 @@ struct PipelineCompileOptions
         options.numPayloadValues       = numPayloadValues;
         options.numAttributeValues     = numAttributeValues;
         options.exceptionFlags         = exceptionFlags;
-#if OPTIX_VERSION > 70000	
+        IF_OPTIX71(
         options.usesPrimitiveTypeFlags = usesPrimitiveTypeFlags;
-#endif
+        )
         if( pipelineLaunchParamsVariableName_ )
             pipelineLaunchParamsVariableName =
                 pipelineLaunchParamsVariableName_;
@@ -297,33 +292,20 @@ struct ModuleCompileBoundValueEntry
         setAnnotation( annotation );
     }
 
+
     ModuleCompileBoundValueEntry(const ModuleCompileBoundValueEntry& other)
     {
         value      = other.value;
         annotation = other.annotation;
         entry      = other.entry;
-        /*
-        entry.boundValuePtr = value.data();
-        entry.sizeInBytes   = value.size();
-        */
-
     }
-    /*
-    ModuleCompileBoundValueEntry& operator=
-        (const ModuleCompileBoundValueEntry&) = delete;
-    ModuleCompileBoundValueEntry&& operator=
-        (ModuleCompileBoundValueEntry&&) = delete;
-    */
+
 
     ModuleCompileBoundValueEntry( ModuleCompileBoundValueEntry&& other )
     {
         value      = std::move( other.value );
         annotation = std::move( other.annotation );
         entry      = other.entry;
-        /*
-        entry.boundValuePtr = value.data();
-        entry.sizeInBytes   = value.size();
-        */
     }
 
 
@@ -361,36 +343,48 @@ struct ModuleCompileBoundValueEntry
     std::string            annotation;
     std::vector<std::byte> value;
 };
+#endif // OPTIX_VERSION >= 70200
+
+
+#if OPTIX_VERSION >= 70400
+struct PayloadType
+{
+    void sync()
+    {
+    }
+
+    OptixPayloadType  payload_type{};
+};
+#endif // OPTIX_VERSION >= 70400
+
 
 struct ModuleCompileOptions
 {
     ModuleCompileOptions(
         int32_t                       maxRegisterCount,
         OptixCompileOptimizationLevel optLevel,
-        OptixCompileDebugLevel        debugLevel,
-        std::vector<pyoptix::ModuleCompileBoundValueEntry>&& bound_values
+        OptixCompileDebugLevel        debugLevel
+        IF_OPTIX72( COMMA std::vector<pyoptix::ModuleCompileBoundValueEntry>&& bound_values )
+        IF_OPTIX74( COMMA std::vector<pyoptix::PayloadType>&& payload_types )
         )
     {
         options.maxRegisterCount = maxRegisterCount;
         options.optLevel         = optLevel;
         options.debugLevel       = debugLevel;
 
-        options.numPayloadTypes = 0; // TODO
-        options.payloadTypes = nullptr; // TODO
-        setBoundValues( std::move( bound_values ) );
-    }
-
-
-    void setBoundValues(
-        std::vector<pyoptix::ModuleCompileBoundValueEntry>&& bound_values
-        )
-    {
+        IF_OPTIX72(
         pyboundValues = std::move( bound_values );
+        )
 
+        IF_OPTIX74(
+        pypayloadTypes = std::move( payload_types );
+        )
     }
+
 
     void sync()
     {
+#if OPTIX_VERSION >= 70200
         boundValues.clear();
         for( auto& pybve : pyboundValues )
         {
@@ -402,31 +396,38 @@ struct ModuleCompileOptions
                                  nullptr             :
                                  boundValues.data();
         options.numBoundValues = static_cast<uint32_t>( boundValues.size() );
+#endif 
+
+#if OPTIX_VERSION >= 70400
+        payloadTypes.clear();
+        for( auto& pypt : pypayloadTypes )
+        {
+            pypt.sync();
+            payloadTypes.push_back( pypt.payload_type);
+        }
+
+        options.payloadTypes    = payloadTypes.empty() ?
+                                 nullptr             :
+                                 payloadTypes.data();
+        options.numPayloadTypes= static_cast<uint32_t>( payloadTypes.size() );
+#endif
     }
 
     OptixModuleCompileOptions options{};
+
+#if OPTIX_VERSION >= 70200
     std::vector<pyoptix::ModuleCompileBoundValueEntry> pyboundValues;
     std::vector<OptixModuleCompileBoundValueEntry>     boundValues;
-};
-#elif OPTIX_VERSION <= 70100
-struct ModuleCompileOptions
-{
-    ModuleCompileOptions(
-        int32_t                       maxRegisterCount,
-        OptixCompileOptimizationLevel optLevel,
-        OptixCompileDebugLevel        debugLevel
-        )
-    {
-        options.maxRegisterCount = maxRegisterCount;
-        options.optLevel         = optLevel;
-        options.debugLevel       = debugLevel;
-    }
-
-    OptixModuleCompileOptions options{};
-};
 #endif
+#if OPTIX_VERSION >= 70400
+    std::vector<pyoptix::PayloadType> pypayloadTypes;
+    std::vector<OptixPayloadType>     payloadTypes;
+#endif
+};
 
-#if OPTIX_VERSION > 70000
+
+
+#if OPTIX_VERSION >= 70100
 struct BuiltinISOptions
 {
     OptixBuiltinISOptions options;
@@ -564,16 +565,19 @@ void convertBuildInputs(
             build_inputs[idx].type          = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
             build_inputs[idx].triangleArray = tri_array.build_input;
         }
-#if OPTIX_VERSION > 70000	
+#if OPTIX_VERSION >= 70100	
         else if( py::isinstance<pyoptix::BuildInputCurveArray>( list_elem ) )
         {
+            // TODO
         }
 #endif
         else if( py::isinstance<pyoptix::BuildInputCustomPrimitiveArray>( list_elem ) )
         {
+            // TODO
         }
         else if( py::isinstance<pyoptix::BuildInputInstanceArray>( list_elem ) )
         {
+            // TODO
         }
         else
         {
@@ -881,9 +885,7 @@ py::tuple moduleCreateFromPTX(
     char   log_buf[ LOG_BUFFER_MAX_SIZE ];
     log_buf[0] = '\0';
 
-#if OPTIX_VERSION >= 70200
     moduleCompileOptions.sync();
-#endif
     pipelineCompileOptions.sync();
 
     pyoptix::Module module;
@@ -913,7 +915,8 @@ void moduleDestroy(
     );
 }
 
-#if OPTIX_VERSION > 70000
+
+#if OPTIX_VERSION >= 70100
 pyoptix::Module builtinISModuleGet(
        const pyoptix::DeviceContext&          context,
              pyoptix::ModuleCompileOptions&   moduleCompileOptions,
@@ -921,9 +924,7 @@ pyoptix::Module builtinISModuleGet(
        const pyoptix::BuiltinISOptions&       builtinISOptions
     )
 {
-#if OPTIX_VERSION >= 70200
     moduleCompileOptions.sync();
-#endif
     pipelineCompileOptions.sync();
 
     pyoptix::Module module;
@@ -938,7 +939,8 @@ pyoptix::Module builtinISModuleGet(
     );
     return module;
 }
-#endif
+#endif // OPTIX_VERSION >= 70100
+
 
 OptixStackSizes programGroupGetStackSize(
        pyoptix::ProgramGroup programGroup
@@ -1756,17 +1758,17 @@ PYBIND11_MODULE( optix, m )
         .export_values();
 
     py::enum_<OptixIndicesFormat>(m, "IndicesFormat", py::arithmetic())
-#if OPTIX_VERSION > 70000
+        IF_OPTIX71(
         .value( "INDICES_FORMAT_NONE", OPTIX_INDICES_FORMAT_NONE )
-#endif
+        )
         .value( "INDICES_FORMAT_UNSIGNED_SHORT3", OPTIX_INDICES_FORMAT_UNSIGNED_SHORT3 )
         .value( "INDICES_FORMAT_UNSIGNED_INT3", OPTIX_INDICES_FORMAT_UNSIGNED_INT3 )
         .export_values();
 
     py::enum_<OptixVertexFormat>(m, "VertexFormat", py::arithmetic())
-#if OPTIX_VERSION > 70000
+        IF_OPTIX71(
         .value( "VERTEX_FORMAT_NONE", OPTIX_VERTEX_FORMAT_NONE )
-#endif
+        )
         .value( "VERTEX_FORMAT_FLOAT3", OPTIX_VERTEX_FORMAT_FLOAT3 )
         .value( "VERTEX_FORMAT_FLOAT2", OPTIX_VERTEX_FORMAT_FLOAT2 )
         .value( "VERTEX_FORMAT_HALF3", OPTIX_VERTEX_FORMAT_HALF3 )
@@ -1775,7 +1777,7 @@ PYBIND11_MODULE( optix, m )
         .value( "VERTEX_FORMAT_SNORM16_2", OPTIX_VERTEX_FORMAT_SNORM16_2 )
         .export_values();
 
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION >= 70100
     py::enum_<OptixTransformFormat>(m, "TransformFormat", py::arithmetic())
         .value( "TRANSFORM_FORMAT_NONE", OPTIX_TRANSFORM_FORMAT_NONE )
         .value( "TRANSFORM_FORMAT_MATRIX_FLOAT12", OPTIX_TRANSFORM_FORMAT_MATRIX_FLOAT12 )
@@ -1803,9 +1805,9 @@ PYBIND11_MODULE( optix, m )
         .value( "BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES", OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES )
         .value( "BUILD_INPUT_TYPE_INSTANCES", OPTIX_BUILD_INPUT_TYPE_INSTANCES )
         .value( "BUILD_INPUT_TYPE_INSTANCE_POINTERS", OPTIX_BUILD_INPUT_TYPE_INSTANCE_POINTERS )
-#if OPTIX_VERSION > 70000
+        IF_OPTIX71(
         .value( "BUILD_INPUT_TYPE_CURVES", OPTIX_BUILD_INPUT_TYPE_CURVES )
-#endif
+        )
         .export_values();
 
     py::enum_<OptixInstanceFlags>(m, "InstanceFlags", py::arithmetic())
@@ -1904,9 +1906,9 @@ PYBIND11_MODULE( optix, m )
         .export_values();
 
     py::enum_<OptixCompileDebugLevel>(m, "CompileDebugLevel", py::arithmetic())
-#if OPTIX_VERSION > 70000
+        IF_OPTIX71(
         .value( "COMPILE_DEBUG_LEVEL_DEFAULT",  OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT  )
-#endif
+        )
         .value( "COMPILE_DEBUG_LEVEL_NONE",     OPTIX_COMPILE_DEBUG_LEVEL_NONE     )
 #if OPTIX_VERSION < 70400
         .value( "COMPILE_DEBUG_LEVEL_LINEINFO", OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO )
@@ -1978,19 +1980,17 @@ PYBIND11_MODULE( optix, m )
         .value( "EXCEPTION_CODE_TRAVERSAL_INVALID_TRAVERSABLE", OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_TRAVERSABLE )
         .value( "EXCEPTION_CODE_TRAVERSAL_INVALID_MISS_SBT", OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_MISS_SBT )
         .value( "EXCEPTION_CODE_TRAVERSAL_INVALID_HIT_SBT", OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_HIT_SBT )
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION >= 70100
         .value( "EXCEPTION_CODE_UNSUPPORTED_PRIMITIVE_TYPE", OPTIX_EXCEPTION_CODE_UNSUPPORTED_PRIMITIVE_TYPE )
         .value( "EXCEPTION_CODE_INVALID_RAY", OPTIX_EXCEPTION_CODE_INVALID_RAY )
         .value( "EXCEPTION_CODE_CALLABLE_PARAMETER_MISMATCH", OPTIX_EXCEPTION_CODE_CALLABLE_PARAMETER_MISMATCH )
         .value( "EXCEPTION_CODE_BUILTIN_IS_MISMATCH", OPTIX_EXCEPTION_CODE_BUILTIN_IS_MISMATCH )
+        .value( "EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS", OPTIX_EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS )
 #endif
 #if OPTIX_VERSION >= 70200
         .value( "EXCEPTION_CODE_CALLABLE_INVALID_SBT", OPTIX_EXCEPTION_CODE_CALLABLE_INVALID_SBT )
         .value( "EXCEPTION_CODE_CALLABLE_NO_DC_SBT_RECORD", OPTIX_EXCEPTION_CODE_CALLABLE_NO_DC_SBT_RECORD )
         .value( "EXCEPTION_CODE_CALLABLE_NO_CC_SBT_RECORD", OPTIX_EXCEPTION_CODE_CALLABLE_NO_CC_SBT_RECORD )
-#endif
-#if OPTIX_VERSION > 70000
-        .value( "EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS", OPTIX_EXCEPTION_CODE_UNSUPPORTED_SINGLE_LEVEL_GAS )
 #endif
         .export_values();
 
@@ -2026,9 +2026,9 @@ PYBIND11_MODULE( optix, m )
         .def( "getCacheDatabaseSizes", &pyoptix::deviceContextGetCacheDatabaseSizes )
         .def( "pipelineCreate", &pyoptix::pipelineCreate )
         .def( "moduleCreateFromPTX", &pyoptix::moduleCreateFromPTX )
-#if OPTIX_VERSION > 70000
+        IF_OPTIX71(
         .def( "builtinISModuleGet", &pyoptix::builtinISModuleGet )
-#endif
+        )
         .def( "programGroupCreate", &pyoptix::programGroupCreate )
         .def( "accelComputeMemoryUsage", &pyoptix::accelComputeMemoryUsage )
         .def( "accelBuild", &pyoptix::accelBuild )
@@ -2150,24 +2150,18 @@ PYBIND11_MODULE( optix, m )
                 unsigned int,
                 unsigned int,
                 unsigned int
-#if OPTIX_VERSION > 70000
-	        , OptixTransformFormat
-#endif
+                IF_OPTIX71( COMMA  OptixTransformFormat )
             >(),
             py::arg( "vertexBuffers_"              ) = py::list(), // list of CUdeviceptr
-#if OPTIX_VERSION > 70000
-            py::arg( "vertexFormat"                ) = OPTIX_VERTEX_FORMAT_NONE,
-#else
-            py::arg( "vertexFormat"                ) = static_cast<OptixVertexFormat>(0x0000u),
-#endif
+            py::arg( "vertexFormat"                ) = 
+                IF_OPTIX71_ELSE( OPTIX_VERTEX_FORMAT_NONE, static_cast<OptixVertexFormat>(0x0000u) 
+            ),
             py::arg( "vertexStrideInBytes"         ) = 0u,
             py::arg( "indexBuffer"                 ) = 0u,
             py::arg( "numIndexTriplets"            ) = 0u,
-#if OPTIX_VERSION > 70000
-            py::arg( "indexFormat"                 ) = OPTIX_INDICES_FORMAT_NONE,
-#else
-            py::arg( "indexFormat"                 ) = static_cast<OptixIndicesFormat>(0x0000u),
-#endif
+            py::arg( "indexFormat"                 ) = 
+                IF_OPTIX71_ELSE( OPTIX_INDICES_FORMAT_NONE, static_cast<OptixIndicesFormat>(0x0000u) 
+            ),
             py::arg( "indexStrideInBytes"          ) = 0u,
             py::arg( "preTransform"                ) = 0u,
             py::arg( "flags_"                      ) = py::list(), // list of uint32_t
@@ -2176,9 +2170,9 @@ PYBIND11_MODULE( optix, m )
             py::arg( "sbtIndexOffsetSizeInBytes"   ) = 0u,
             py::arg( "sbtIndexOffsetStrideInBytes" ) = 0u,
             py::arg( "primitiveIndexOffset"        ) = 0u
-#if OPTIX_VERSION > 70000
-            , py::arg( "transformFormat"             ) = OPTIX_TRANSFORM_FORMAT_NONE
-#endif
+            IF_OPTIX71( COMMA  
+            py::arg( "transformFormat"             ) = OPTIX_TRANSFORM_FORMAT_NONE
+            )
         )
         .def_property( "vertexBuffers",
             []( const pyoptix::BuildInputTriangleArray& self )
@@ -2270,7 +2264,7 @@ PYBIND11_MODULE( optix, m )
             [](pyoptix::BuildInputTriangleArray& self, unsigned int val)
             { self.build_input.primitiveIndexOffset = val; }
             )
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION >= 70100
         .def_property( "transformFormat",
             []( const pyoptix::BuildInputTriangleArray& self )
             { return self.build_input.transformFormat; },
@@ -2280,7 +2274,8 @@ PYBIND11_MODULE( optix, m )
 #endif
         ;
 
-#if OPTIX_VERSION > 70000
+
+#if OPTIX_VERSION > 70100
     py::class_<pyoptix::BuildInputCurveArray>(m, "BuildInputCurveArray")
         .def( 
             py::init< 
@@ -2391,7 +2386,8 @@ PYBIND11_MODULE( optix, m )
             { self.build_input.primitiveIndexOffset = val; }
             )
          ;
-#endif
+#endif // OPTIX_VERSION > 70100
+
 
     py::class_<OptixAabb>(m, "Aabb")
         .def( py::init([]() { return std::unique_ptr<OptixAabb>(new OptixAabb{} ); } ) )
@@ -2426,7 +2422,7 @@ PYBIND11_MODULE( optix, m )
         .def( py::init([]() { return std::unique_ptr<OptixBuildInput>(new OptixBuildInput{} ); } ) )
         .def_readwrite( "type", &OptixBuildInput::type )
         .def_readwrite( "triangleArray", &OptixBuildInput::triangleArray )
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION >= 70100
         .def_readwrite( "curveArray", &OptixBuildInput::curveArray )
         .def_readwrite( "customPrimitiveArray", &OptixBuildInput::customPrimitiveArray )
 #else
@@ -2542,9 +2538,9 @@ PYBIND11_MODULE( optix, m )
         .def_readwrite( "denoiseAlpha", &OptixDenoiserParams::denoiseAlpha )
         .def_readwrite( "hdrIntensity", &OptixDenoiserParams::hdrIntensity )
         .def_readwrite( "blendFactor", &OptixDenoiserParams::blendFactor )
-#if OPTIX_VERSION >= 70200
+        IF_OPTIX72(
         .def_readwrite( "hdrAverageColor", &OptixDenoiserParams::hdrAverageColor )
-#endif
+        )
         ;
 
     py::class_<OptixDenoiserSizes>(m, "DenoiserSizes")
@@ -2559,6 +2555,7 @@ PYBIND11_MODULE( optix, m )
 #endif
         .def_readwrite( "overlapWindowSizeInPixels", &OptixDenoiserSizes::overlapWindowSizeInPixels )
         ;
+
 
 #if OPTIX_VERSION >= 70200
     py::class_<pyoptix::ModuleCompileBoundValueEntry>(
@@ -2595,20 +2592,26 @@ PYBIND11_MODULE( optix, m )
             { self.setAnnotation( std::move( val ) );  }
             )
         ;
+#endif // OPTIX_VERSION >= 70200
+
 
     py::class_<pyoptix::ModuleCompileOptions>(m, "ModuleCompileOptions")
         .def(
             py::init<
                 int32_t,
                 OptixCompileOptimizationLevel,
-                OptixCompileDebugLevel,
-                std::vector<pyoptix::ModuleCompileBoundValueEntry>&&
+                OptixCompileDebugLevel
+                IF_OPTIX72( COMMA std::vector<pyoptix::ModuleCompileBoundValueEntry>&& )
+                IF_OPTIX74( COMMA std::vector<pyoptix::PayloadType>&&  )
                 >(),
             py::arg( "maxRegisterCount" ) = 0u,
             py::arg( "optLevel"         ) = OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-            py::arg( "debugLevel"       ) = OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT,
-            py::arg( "boundValues"      ) =
-                std::vector<pyoptix::ModuleCompileBoundValueEntry>()
+            py::arg( "debugLevel"       ) = 
+            IF_OPTIX71_ELSE( 
+                OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO 
+            )
+            IF_OPTIX72( COMMA py::arg( "boundValues"  ) = std::vector<pyoptix::ModuleCompileBoundValueEntry>() )
+            IF_OPTIX74( COMMA py::arg( "payloadTypes" ) = std::vector<pyoptix::PayloadType>() )
             )
         .def_property( "maxRegisterCount",
             [](const pyoptix::ModuleCompileOptions& self)
@@ -2630,13 +2633,7 @@ PYBIND11_MODULE( optix, m )
                OptixCompileDebugLevel val)
             { self.options.debugLevel = val; }
             )
-        .def_property( "debugLevel",
-            [](const pyoptix::ModuleCompileOptions& self)
-            { return self.options.debugLevel; },
-            [](pyoptix::ModuleCompileOptions& self,
-               OptixCompileDebugLevel val)
-            { self.options.debugLevel = val; }
-            )
+#if OPTIX_VERSION >= 70200
         .def_property( "boundValues",
             // This doesnt do what you probably want it to so disable it
             //[](const pyoptix::ModuleCompileOptions& self)
@@ -2644,54 +2641,21 @@ PYBIND11_MODULE( optix, m )
             nullptr,
             [](pyoptix::ModuleCompileOptions& self,
                std::vector<pyoptix::ModuleCompileBoundValueEntry>&& val )
-            { self.setBoundValues( std::move( val ) ); }
+            { self.pyboundValues = std::move( val ); }
             )
-        ;
-#elif OPTIX_VERSION <= 70100
-    py::class_<pyoptix::ModuleCompileOptions>(m, "ModuleCompileOptions")
-        .def(
-            py::init<
-                int32_t,
-                OptixCompileOptimizationLevel,
-                OptixCompileDebugLevel
-                >(),
-            py::arg( "maxRegisterCount" ) = 0u,
-            py::arg( "optLevel"         ) = OPTIX_COMPILE_OPTIMIZATION_DEFAULT,
-#if OPTIX_VERSION > 70000
-            py::arg( "debugLevel"       ) = OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT
-#else
-            py::arg( "debugLevel"       ) = OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO
 #endif
-            )
-        .def_property( "maxRegisterCount",
-            [](const pyoptix::ModuleCompileOptions& self)
-            { return self.options.maxRegisterCount; },
-            [](pyoptix::ModuleCompileOptions& self, int32_t val)
-            { self.options.maxRegisterCount = val;  }
-            )
-        .def_property( "optLevel",
-            [](const pyoptix::ModuleCompileOptions& self)
-            { return self.options.optLevel; },
+#if OPTIX_VERSION >= 70400
+        .def_property( "payloadTypes",
+            // This doesnt do what you probably want it to so disable it
+            //[](const pyoptix::PayloadType& self)
+            //{ return self.payloadTypes; },
+            nullptr,
             [](pyoptix::ModuleCompileOptions& self,
-               OptixCompileOptimizationLevel val)
-            { self.options.optLevel = val; }
+               std::vector<pyoptix::PayloadType>&& val )
+            { self.pypayloadTypes = std::move( val ); }
             )
-        .def_property( "debugLevel",
-            [](const pyoptix::ModuleCompileOptions& self)
-            { return self.options.debugLevel; },
-            [](pyoptix::ModuleCompileOptions& self,
-               OptixCompileDebugLevel val)
-            { self.options.debugLevel = val; }
-            )
-        .def_property( "debugLevel",
-            [](const pyoptix::ModuleCompileOptions& self)
-            { return self.options.debugLevel; },
-            [](pyoptix::ModuleCompileOptions& self,
-               OptixCompileDebugLevel val)
-            { self.options.debugLevel = val; }
-            )
-        ;
 #endif
+        ;
 
     /*
     py::class_<pyoptix::PayloadType>(m, "PayloadType")
@@ -2988,9 +2952,7 @@ PYBIND11_MODULE( optix, m )
                 int32_t,
                 uint32_t,
                 const char*
-#if OPTIX_VERSION > 70000
-	        , int32_t
-#endif
+                IF_OPTIX71( COMMA int32_t )
 	    >(),
             py::arg( "usesMotionBlur" )=0,
             py::arg( "traversableGraphFlags" )=0u,
@@ -2998,9 +2960,7 @@ PYBIND11_MODULE( optix, m )
             py::arg( "numAttributeValues" )=0,
             py::arg( "exceptionFlags" )=0u,
             py::arg( "pipelineLaunchParamsVariableName" )=nullptr
-#if OPTIX_VERSION > 70000
-            , py::arg( "usesPrimitiveTypeFlags" )=0
-#endif
+            IF_OPTIX71( COMMA py::arg( "usesPrimitiveTypeFlags" )=0 )
             )
         .def_property( "usesMotionBlur",
             [](const pyoptix::PipelineCompileOptions& self)
@@ -3036,7 +2996,7 @@ PYBIND11_MODULE( optix, m )
             "pipelineLaunchParamsVariableName",
             &pyoptix::PipelineCompileOptions::pipelineLaunchParamsVariableName
         )
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION >= 70100
         .def_property( "usesPrimitiveTypeFlags",
             [](const pyoptix::PipelineCompileOptions& self)
             { return self.options.usesPrimitiveTypeFlags; },
@@ -3080,7 +3040,7 @@ PYBIND11_MODULE( optix, m )
         .def_readwrite( "dssDC", &OptixStackSizes::dssDC )
         ;
 
-#if OPTIX_VERSION > 70000
+#if OPTIX_VERSION >= 70100
     py::class_<pyoptix::BuiltinISOptions>(m, "BuiltinISOptions")
         .def(
             py::init<OptixPrimitiveType, bool>(),
@@ -3100,7 +3060,8 @@ PYBIND11_MODULE( optix, m )
             { self.options.usesMotionBlur = val; }
         )
         ;
-#endif
+#endif // OPTIX_VERSION >= 70100
+
     
     py::class_<OptixTraversableHandle>(m, "TraversableHandle")
         .def( py::init( []()

@@ -395,6 +395,21 @@ def create_default_ctx():
     return optix.deviceContextCreate( cu_ctx, ctx_options )
         
 
+def optix_version_gte( version ):
+    if optix.version()[0] >  version[0]:
+        return True
+    if optix.version()[0] == version[0] and optix.version()[1] >= version[1]:
+        return True
+    return False
+
+
+def default_debug_level():
+    if optix_version_gte( (7,1) ):
+        return optix.COMPILE_DEBUG_LEVEL_DEFAULT
+    else: 
+        return optix.COMPILE_DEBUG_LEVEL_LINEINFO 
+
+
 def create_default_module():
     ctx = create_default_ctx();
     module_opts   = optix.ModuleCompileOptions()

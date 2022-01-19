@@ -21,7 +21,7 @@ class TestDeviceContextOptions:
         options = ox.DeviceContextOptions()
         assert options.logCallbackFunction is None
         assert options.logCallbackLevel == 0
-        if ox.version()[1] >= 2:
+        if tutil.optix_version_gte( (7,2) ): 
             assert options.validationMode == ox.DEVICE_CONTEXT_VALIDATION_MODE_OFF
 
     def test_ctor0(self):
@@ -30,7 +30,7 @@ class TestDeviceContextOptions:
    
     def test_ctor1(self):
         logger = Logger()
-        if ox.version()[1] >= 2:
+        if tutil.optix_version_gte( (7,2) ): 
             options = ox.DeviceContextOptions(
                 logCallbackFunction = logger,
                 logCallbackLevel    = 3,
@@ -43,7 +43,7 @@ class TestDeviceContextOptions:
             )
         assert options.logCallbackFunction == logger
         assert options.logCallbackLevel    == 3
-        if ox.version()[1] >= 2:
+        if tutil.optix_version_gte( (7,2) ): 
             assert options.validationMode == ox.DEVICE_CONTEXT_VALIDATION_MODE_ALL
         else:
             assert options.validationMode == ox.DEVICE_CONTEXT_VALIDATION_MODE_OFF

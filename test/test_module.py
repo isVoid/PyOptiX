@@ -5,9 +5,10 @@ import array
 import pytest
 
 import sample_ptx
+import tutil 
 
 
-if ox.version()[1] >= 2:
+if tutil.optix_version_gte( (7,2) ): 
     class TestModuleCompileBoundValyeEntry:
         def test_compile_bound_value_entry( self ):
             bound_value = array.array( 'f', [0.1, 0.2, 0.3] )
@@ -29,17 +30,17 @@ if ox.version()[1] >= 2:
 
 
 class TestModule:
-    if ox.version()[1] >= 2:
+    if tutil.optix_version_gte( (7,2) ): 
         def test_options( self ):
             mod_opts = ox.ModuleCompileOptions(
                 maxRegisterCount = 64,
                 optLevel         = ox.COMPILE_OPTIMIZATION_LEVEL_1,
-                debugLevel       = ox.COMPILE_DEBUG_LEVEL_LINEINFO,
+                debugLevel       = tutil.default_debug_level(),
                 boundValues      = []
             )
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_LEVEL_1
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            assert mod_opts.debugLevel       == tutil.default_debug_level() 
             # ox.ModuleCompileOptions.boundValues is write-only
             with pytest.raises( AttributeError ):
                 print( mod_opts.boundValues )
@@ -47,24 +48,24 @@ class TestModule:
             mod_opts = ox.ModuleCompileOptions()
             assert mod_opts.maxRegisterCount == ox.COMPILE_DEFAULT_MAX_REGISTER_COUNT
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_DEFAULT
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_DEFAULT
+            assert mod_opts.debugLevel       == tutil.default_debug_level()
             mod_opts.maxRegisterCount = 64
             mod_opts.optLevel         = ox.COMPILE_OPTIMIZATION_LEVEL_1
-            mod_opts.debugLevel       = ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            mod_opts.debugLevel       = tutil.default_debug_level()
             mod_opts.boundValues = [ ox.ModuleCompileBoundValueEntry() ];
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_LEVEL_1
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_LINEINFO
-    elif ox.version()[1] == 1:
+            assert mod_opts.debugLevel       == tutil.default_debug_level()
+    elif tutil.optix_version_gte( (7,1) ): 
         def test_options( self ):
             mod_opts = ox.ModuleCompileOptions(
                 maxRegisterCount = 64,
                 optLevel         = ox.COMPILE_OPTIMIZATION_LEVEL_1,
-                debugLevel       = ox.COMPILE_DEBUG_LEVEL_LINEINFO
+                debugLevel       = tutil.default_debug_level()
             )
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_LEVEL_1
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            assert mod_opts.debugLevel       == tutil.default_debug_level()
 
             mod_opts = ox.ModuleCompileOptions()
             assert mod_opts.maxRegisterCount == ox.COMPILE_DEFAULT_MAX_REGISTER_COUNT
@@ -72,25 +73,25 @@ class TestModule:
             assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_DEFAULT
             mod_opts.maxRegisterCount = 64
             mod_opts.optLevel         = ox.COMPILE_OPTIMIZATION_LEVEL_1
-            mod_opts.debugLevel       = ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            mod_opts.debugLevel       = tutil.default_debug_level()
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_LEVEL_1
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            assert mod_opts.debugLevel       == tutil.default_debug_level()
     else:
         def test_options( self ):
             mod_opts = ox.ModuleCompileOptions(
                 maxRegisterCount = 64,
                 optLevel         = ox.COMPILE_OPTIMIZATION_LEVEL_1,
-                debugLevel       = ox.COMPILE_DEBUG_LEVEL_LINEINFO
+                debugLevel       = tutil.default_debug_level()
             )
             assert mod_opts.maxRegisterCount == 64
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_LEVEL_1
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            assert mod_opts.debugLevel       == tutil.default_debug_level()
 
             mod_opts = ox.ModuleCompileOptions()
             assert mod_opts.maxRegisterCount == ox.COMPILE_DEFAULT_MAX_REGISTER_COUNT
             assert mod_opts.optLevel         == ox.COMPILE_OPTIMIZATION_DEFAULT
-            assert mod_opts.debugLevel       == ox.COMPILE_DEBUG_LEVEL_LINEINFO
+            assert mod_opts.debugLevel       == tutil.default_debug_level()
             mod_opts.maxRegisterCount = 64
             mod_opts.optLevel         = ox.COMPILE_OPTIMIZATION_LEVEL_1
             mod_opts.debugLevel       = ox.COMPILE_DEBUG_LEVEL_FULL
@@ -113,7 +114,7 @@ class TestModule:
         mod.destroy()
         ctx.destroy()
 
-    if ox.version()[1] > 0:
+    if tutil.optix_version_gte( (7,1) ): 
         def test_builtin_is_module_get( self ):
             ctx = ox.deviceContextCreate(0, ox.DeviceContextOptions())
             module_opts     = ox.ModuleCompileOptions()

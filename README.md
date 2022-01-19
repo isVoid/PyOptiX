@@ -23,7 +23,7 @@ OptiX python module build requirements:
 * [cmake](https://cmake.org/)
 * [pip](https://pypi.org/project/pip/)
 
-To run the PyOptiX examples or tests the python modules specified in 
+To run the PyOptiX examples or tests, the python modules specified in 
 `PyOptiX/requirements.txt` must be installed:
 * pytest
 * cupy

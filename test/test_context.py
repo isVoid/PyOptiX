@@ -2,6 +2,8 @@ import cupy as cp
 import optix as ox
 import pytest 
 
+import tutil 
+
 
 class Logger:
     def __init__(self):

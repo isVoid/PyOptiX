@@ -349,11 +349,27 @@ struct ModuleCompileBoundValueEntry
 #if OPTIX_VERSION >= 70400
 struct PayloadType
 {
-    void sync()
+    PayloadType( const py::list&  payload_semantics )
     {
+        setPayloadSemantics( payload_semantics );
     }
 
+
+    void setPayloadSemantics( const py::list& val )
+    {
+        payload_semantics = val.cast<std::vector<uint32_t> >();
+    }
+
+
+    void sync()
+    {
+        payload_type.numPayloadValues = payload_semantics.size();
+        payload_type.payloadSemantics = payload_semantics.data();
+    }
+
+
     OptixPayloadType  payload_type{};
+    std::vector<uint32_t> payload_semantics;
 };
 #endif // OPTIX_VERSION >= 70400
 
@@ -431,6 +447,7 @@ struct ModuleCompileOptions
 struct BuiltinISOptions
 {
     OptixBuiltinISOptions options;
+    // TODO
 };
 #endif
 
@@ -1862,7 +1879,7 @@ PYBIND11_MODULE( optix, m )
         .export_values();
 
     /*
-    TODO: check for 7.2
+    TODO: check for 7.2, temporal in 74
     py::enum_<OptixDenoiserModelKind>(m, "DenoiserModelKind", py::arithmetic())
         .value( "DENOISER_MODEL_KIND_USER", OPTIX_DENOISER_MODEL_KIND_USER )
         .value( "DENOISER_MODEL_KIND_LDR", OPTIX_DENOISER_MODEL_KIND_LDR )
@@ -2006,6 +2023,30 @@ PYBIND11_MODULE( optix, m )
         .value( "QUERY_FUNCTION_TABLE_OPTION_DUMMY", OPTIX_QUERY_FUNCTION_TABLE_OPTION_DUMMY )
         .export_values();
 
+
+#if OPTIX_VERSION >= 70400
+    py::enum_<OptixPayloadSemantics>(m, "PayloadSemantics", py::arithmetic())
+        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_NONE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_NONE )
+        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_READ", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ )
+        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE )
+        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE )
+        .value( "PAYLOAD_SEMANTICS_CH_READ", OPTIX_PAYLOAD_SEMANTICS_CH_READ )
+        .value( "PAYLOAD_SEMANTICS_CH_WRITE", OPTIX_PAYLOAD_SEMANTICS_CH_WRITE )
+        .value( "PAYLOAD_SEMANTICS_CH_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE )
+        .value( "PAYLOAD_SEMANTICS_MS_NONE", OPTIX_PAYLOAD_SEMANTICS_MS_NONE )
+        .value( "PAYLOAD_SEMANTICS_MS_READ", OPTIX_PAYLOAD_SEMANTICS_MS_READ )
+        .value( "PAYLOAD_SEMANTICS_MS_WRITE", OPTIX_PAYLOAD_SEMANTICS_MS_WRITE )
+        .value( "PAYLOAD_SEMANTICS_MS_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE )
+        .value( "PAYLOAD_SEMANTICS_AH_NONE", OPTIX_PAYLOAD_SEMANTICS_AH_NONE )
+        .value( "PAYLOAD_SEMANTICS_AH_READ", OPTIX_PAYLOAD_SEMANTICS_AH_READ )
+        .value( "PAYLOAD_SEMANTICS_AH_WRITE", OPTIX_PAYLOAD_SEMANTICS_AH_WRITE )
+        .value( "PAYLOAD_SEMANTICS_AH_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_AH_READ_WRITE )
+        .value( "PAYLOAD_SEMANTICS_IS_NONE", OPTIX_PAYLOAD_SEMANTICS_IS_NONE )
+        .value( "PAYLOAD_SEMANTICS_IS_READ", OPTIX_PAYLOAD_SEMANTICS_IS_READ )
+        .value( "PAYLOAD_SEMANTICS_IS_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_WRITE )
+        .value( "PAYLOAD_SEMANTICS_IS_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_READ_WRITE )
+        .export_values();
+#endif
 
 
     //---------------------------------------------------------------------------
@@ -2595,6 +2636,31 @@ PYBIND11_MODULE( optix, m )
 #endif // OPTIX_VERSION >= 70200
 
 
+#if OPTIX_VERSION >= 70400
+    py::class_<pyoptix::PayloadType>(
+            m, "PayloadType"
+            )
+        .def(
+            py::init<py::list>(),
+            py::arg( "payloadSemantics" ) = py::list()
+            )
+        .def_property( "pipelineParamOffsetInBytes",
+            [](const pyoptix::ModuleCompileBoundValueEntry& self)
+            { return self.entry.pipelineParamOffsetInBytes; },
+            [](pyoptix::ModuleCompileBoundValueEntry& self, size_t val)
+            { self.entry.pipelineParamOffsetInBytes = val;  }
+            )
+        .def_property( "payloadSemantics",
+            //[](const pyoptix::PayloadType& self)
+            //{ return self.payloadSemantics; },
+            nullptr,
+            [](pyoptix::PayloadType& self, py::list val)
+            { self.setPayloadSemantics( val );  }
+            )
+        ;
+#endif // OPTIX_VERSION >= 70400
+
+
     py::class_<pyoptix::ModuleCompileOptions>(m, "ModuleCompileOptions")
         .def(
             py::init<
@@ -2657,12 +2723,9 @@ PYBIND11_MODULE( optix, m )
 #endif
         ;
 
-    /*
-    py::class_<pyoptix::PayloadType>(m, "PayloadType")
-        ;
-        */
 
     /*
+
     py::class_<pyoptix::ProgramGroupSingleModule>(m, "ProgramGroupSingleModule")
         .def( py::init([]()
             { return std::unique_ptr<pyoptix::ProgramGroupSingleModule>(new pyoptix::ProgramGroupSingleModule{} ); }
@@ -2942,6 +3005,7 @@ PYBIND11_MODULE( optix, m )
         // TODO: check optix version
         //.def_readwrite( "placeholder", &OptixProgramGroupOptions::placeholder )
         ;
+
 
     py::class_<pyoptix::PipelineCompileOptions>(m, "PipelineCompileOptions")
         .def(

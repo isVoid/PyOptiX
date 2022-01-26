@@ -19,7 +19,7 @@ class TestProgramGroupBase:
         self.ctx = ox.deviceContextCreate(0, ox.DeviceContextOptions())
         self.mod, log = self.ctx.moduleCreateFromPTX(ox.ModuleCompileOptions(),
                                                      ox.PipelineCompileOptions(),
-                                                     sample_ptx.sample_ptx)
+                                                     sample_ptx.hello_ptx)
 
     def teardown_method(self):
         self.mod.destroy()

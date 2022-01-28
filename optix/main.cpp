@@ -40,6 +40,7 @@ namespace py = pybind11;
     } while( 0 )
 
 
+
 #define COMMA ,
 
 #if OPTIX_VERSION >= 70100
@@ -61,6 +62,7 @@ namespace py = pybind11;
 #else
 #    define IF_OPTIX74( code ) 
 #endif
+
 
 
 namespace pyoptix
@@ -168,7 +170,7 @@ struct BuildInputTriangleArray
         IF_OPTIX71( COMMA OptixTransformFormat   transformFormat )
         )
     {
-	memset(&build_input, 0, sizeof(OptixBuildInputTriangleArray));
+        memset(&build_input, 0, sizeof(OptixBuildInputTriangleArray));
         vertexBuffers                           = vertexBuffers_.cast<std::vector<CUdeviceptr> >();
         build_input.vertexFormat                = vertexFormat;
         build_input.vertexStrideInBytes         = vertexStrideInBytes;
@@ -202,12 +204,12 @@ struct BuildInputTriangleArray
 };
 
 
-#if OPTIX_VERSION > 70100
+#if OPTIX_VERSION >= 70200
 struct BuildInputCurveArray
 {
     BuildInputCurveArray(
         OptixPrimitiveType  curveType,
-        unsigned int        numPrimitives , 
+        unsigned int        numPrimitives, 
         const py::list&     vertexBuffers_,
         unsigned int        numVertices,
         unsigned int        vertexStrideInBytes,
@@ -221,14 +223,37 @@ struct BuildInputCurveArray
         unsigned int        primitiveIndexOffset
         )
     {
+        memset(&build_input, 0, sizeof(OptixBuildInputCurveArray));
+        build_input.curveType              = curveType;
+        build_input.numPrimitives          = numPrimitives;
+        vertexBuffers                      = vertexBuffers_.cast<std::vector<CUdeviceptr> >();
+        build_input.numVertices            = numVertices;
+        build_input.vertexStrideInBytes    = vertexStrideInBytes;
+        widthBuffers                       = widthBuffers_.cast<std::vector<CUdeviceptr> >();
+        build_input.widthStrideInBytes     = widthStrideInBytes;
+        normalBuffers                      = normalBuffers_.cast<std::vector<CUdeviceptr> >();
+        build_input.normalStrideInBytes    = normalStrideInBytes;
+        build_input.indexBuffer            = indexBuffer;
+        build_input.indexStrideInBytes     = indexStrideInBytes;
+        build_input.flag                   = flag;
+        build_input.primitiveIndexOffset   = primitiveIndexOffset;
     }
+    
+    void sync()
+    {
+        build_input.vertexBuffers = vertexBuffers.data();
+        build_input.widthBuffers  = widthBuffers.data();
+        build_input.normalBuffers = normalBuffers.data();
+    }
+
 
     std::vector<CUdeviceptr>  vertexBuffers;
     std::vector<CUdeviceptr>  widthBuffers;
     std::vector<CUdeviceptr>  normalBuffers;
     OptixBuildInputCurveArray build_input;
 };
-#endif
+#endif // OPTIX_VERSION >= 70200
+
 
 struct BuildInputCustomPrimitiveArray
 {
@@ -277,6 +302,7 @@ struct PipelineCompileOptions
     std::string pipelineLaunchParamsVariableName;
     OptixPipelineCompileOptions options;
 };
+
 
 #if OPTIX_VERSION >= 70200
 struct ModuleCompileBoundValueEntry
@@ -447,7 +473,6 @@ struct ModuleCompileOptions
 struct BuiltinISOptions
 {
     OptixBuiltinISOptions options;
-    // TODO
 };
 #endif
 
@@ -585,6 +610,10 @@ void convertBuildInputs(
 #if OPTIX_VERSION >= 70100	
         else if( py::isinstance<pyoptix::BuildInputCurveArray>( list_elem ) )
         {
+            pyoptix::BuildInputCurveArray& curve_array= list_elem.cast<pyoptix::BuildInputCurveArray&>();
+            curve_array.sync();
+            build_inputs[idx].type          = OPTIX_BUILD_INPUT_TYPE_CURVES;
+            build_inputs[idx].curveArray    = curve_array.build_input;
             // TODO
         }
 #endif

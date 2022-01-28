@@ -257,6 +257,39 @@ struct BuildInputCurveArray
 
 struct BuildInputCustomPrimitiveArray
 {
+    BuildInputCustomPrimitiveArray(
+        const py::list&     aabbBuffers_,    // list of CUdeviceptr 
+        unsigned int        numPrimitives,
+        unsigned int        strideInBytes,
+        const py::list&     flags_,          // list of uint32_t
+        unsigned int        numSbtRecords,
+        CUdeviceptr         sbtIndexOffsetBuffer,
+        unsigned int        sbtIndexOffsetSizeInBytes,
+        unsigned int        sbtIndexOffsetStrideInBytes,
+        unsigned int        primitiveIndexOffset
+        )
+    {
+        aabbBuffers                             = aabbBuffers_.cast<std::vector<CUdeviceptr> >();
+        build_input.numPrimitives               = numPrimitives;
+        build_input.strideInBytes               = strideInBytes;
+        flags                                   = flags_.cast<std::vector<unsigned int> >();
+        build_input.numSbtRecords               = numSbtRecords;
+        build_input.sbtIndexOffsetBuffer        = sbtIndexOffsetBuffer;
+        build_input.sbtIndexOffsetSizeInBytes   = sbtIndexOffsetSizeInBytes;
+        build_input.sbtIndexOffsetStrideInBytes = sbtIndexOffsetStrideInBytes;
+        build_input.primitiveIndexOffset        = primitiveIndexOffset;
+    }
+
+
+    void sync()
+    {
+        build_input.aabbBuffers = aabbBuffers.data();
+        build_input.flags       = flags.data();
+    }
+
+
+    std::vector<unsigned int> flags;
+    std::vector<CUdeviceptr>  aabbBuffers;
     OptixBuildInputCustomPrimitiveArray build_input;
 };
 
@@ -619,7 +652,12 @@ void convertBuildInputs(
 #endif
         else if( py::isinstance<pyoptix::BuildInputCustomPrimitiveArray>( list_elem ) )
         {
-            // TODO
+            pyoptix::BuildInputCustomPrimitiveArray& cp_array = 
+                list_elem.cast<pyoptix::BuildInputCustomPrimitiveArray&>();
+
+            cp_array.sync();
+            build_inputs[idx].type                 = OPTIX_BUILD_INPUT_TYPE_CUSTOM_PRIMITIVES;
+            build_inputs[idx].customPrimitiveArray = cp_array.build_input;
         }
         else if( py::isinstance<pyoptix::BuildInputInstanceArray>( list_elem ) )
         {
@@ -2469,17 +2507,84 @@ PYBIND11_MODULE( optix, m )
         .def_readwrite( "maxZ", &OptixAabb::maxZ )
         ;
 
-    py::class_<OptixBuildInputCustomPrimitiveArray>(m, "BuildInputCustomPrimitiveArray")
-        .def( py::init([]() { return std::unique_ptr<OptixBuildInputCustomPrimitiveArray>(new OptixBuildInputCustomPrimitiveArray{} ); } ) )
-        .def_readwrite( "aabbBuffers", &OptixBuildInputCustomPrimitiveArray::aabbBuffers )
-        .def_readwrite( "numPrimitives", &OptixBuildInputCustomPrimitiveArray::numPrimitives )
-        .def_readwrite( "strideInBytes", &OptixBuildInputCustomPrimitiveArray::strideInBytes )
-        .def_readwrite( "flags", &OptixBuildInputCustomPrimitiveArray::flags )
-        .def_readwrite( "numSbtRecords", &OptixBuildInputCustomPrimitiveArray::numSbtRecords )
-        .def_readwrite( "sbtIndexOffsetBuffer", &OptixBuildInputCustomPrimitiveArray::sbtIndexOffsetBuffer )
-        .def_readwrite( "sbtIndexOffsetSizeInBytes", &OptixBuildInputCustomPrimitiveArray::sbtIndexOffsetSizeInBytes )
-        .def_readwrite( "sbtIndexOffsetStrideInBytes", &OptixBuildInputCustomPrimitiveArray::sbtIndexOffsetStrideInBytes )
-        .def_readwrite( "primitiveIndexOffset", &OptixBuildInputCustomPrimitiveArray::primitiveIndexOffset )
+
+    py::class_<pyoptix::BuildInputCustomPrimitiveArray>(m, "BuildInputCustomPrimitiveArray")
+        .def( 
+            py::init< 
+                const py::list&,
+                unsigned int,
+                unsigned int,
+                const py::list&,
+                unsigned int,
+                CUdeviceptr,
+                unsigned int,
+                unsigned int,
+                unsigned int
+                >(), 
+            py::arg( "aabbBuffers"                 ) = 0u,
+            py::arg( "numPrimitives"               ) = 0u,
+            py::arg( "strideInBytes"               ) = 0u,
+            py::arg( "flags"                       ) = 0u,
+            py::arg( "numSbtRecords"               ) = 0u,
+            py::arg( "sbtIndexOffsetBuffer"        ) = 0u,
+            py::arg( "sbtIndexOffsetSizeInBytes"   ) = 0u,
+            py::arg( "sbtIndexOffsetStrideInBytes" ) = 0u,
+            py::arg( "primitiveIndexOffset"        ) = 0u
+        )
+        .def_property( "aabbBuffers", 
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self ) 
+            { return py::cast( self.aabbBuffers ); }, 
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, py::list& val) 
+            { self.aabbBuffers =  val.cast<std::vector<CUdeviceptr> >(); }
+            )
+        .def_property( "numPrimitives", 
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self ) 
+            { return self.build_input.numPrimitives; }, 
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, unsigned int val) 
+            { self.build_input.numPrimitives = val; }
+            )
+        .def_property( "strideInBytes", 
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self ) 
+            { return self.build_input.strideInBytes; }, 
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, unsigned int val) 
+            { self.build_input.strideInBytes = val; }
+            )
+        .def_property( "flags",
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self )
+            { return py::cast( self.flags ); },
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, py::list& val)
+            { self.flags =  val.cast<std::vector<unsigned int> >(); }
+            )
+        .def_property( "numSbtRecords",
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self )
+            { return self.build_input.numSbtRecords; },
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, unsigned int val)
+            { self.build_input.numSbtRecords = val; }
+            )
+        .def_property( "sbtIndexOffsetBuffer",
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self )
+            { return self.build_input.sbtIndexOffsetBuffer; },
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, CUdeviceptr val)
+            { self.build_input.sbtIndexOffsetBuffer = val; }
+            )
+        .def_property( "sbtIndexOffsetSizeInBytes",
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self )
+            { return self.build_input.sbtIndexOffsetSizeInBytes; },
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, unsigned int val)
+            { self.build_input.sbtIndexOffsetSizeInBytes = val; }
+            )
+        .def_property( "sbtIndexOffsetStrideInBytes",
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self )
+            { return self.build_input.sbtIndexOffsetStrideInBytes; },
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, unsigned int val)
+            { self.build_input.sbtIndexOffsetStrideInBytes = val; }
+            )
+        .def_property( "primitiveIndexOffset",
+            []( const pyoptix::BuildInputCustomPrimitiveArray& self )
+            { return self.build_input.primitiveIndexOffset; },
+            [](pyoptix::BuildInputCustomPrimitiveArray& self, unsigned int val)
+            { self.build_input.primitiveIndexOffset = val; }
+            )
         ;
 
     py::class_<OptixBuildInputInstanceArray>(m, "BuildInputInstanceArray")

@@ -57,6 +57,12 @@ namespace py = pybind11;
 #    define IF_OPTIX72( code ) 
 #endif
 
+#if OPTIX_VERSION >= 70300
+#    define IF_OPTIX73( code ) code
+#else
+#    define IF_OPTIX73( code ) 
+#endif
+
 #if OPTIX_VERSION >= 70400
 #    define IF_OPTIX74( code ) code
 #else
@@ -1294,7 +1300,6 @@ OptixTraversableHandle accelBuild(
         )
     );
 
-    std::cerr << "IN PYOPTIX: gas_handle: " << output_handle << std::endl;
     return output_handle;
 }
 
@@ -1425,7 +1430,8 @@ void denoiserCreate(
 }
 #endif
 
-/*
+
+#if OPTIX_VERSION < 70300
 void denoiserSetModel(
        pyoptix::Denoiser denoiser,
        OptixDenoiserModelKind kind,
@@ -1442,7 +1448,8 @@ void denoiserSetModel(
         )
     );
 }
-*/
+#endif
+
 
 void denoiserDestroy(
        pyoptix::Denoiser denoiser
@@ -1644,92 +1651,122 @@ py::tuple computeStackSizes(
             &continuationStackSize
             )
         );
+
     return py::make_tuple(
         directCallableStackSizeFromTraversal,
         directCallableStackSizeFromState,
-        continuationStackSize );
+        continuationStackSize 
+        );
 }
 
-void computeStackSizesDCSplit(
-        const OptixStackSizes* stackSizes,
+py::tuple computeStackSizesDCSplit(
+        const OptixStackSizes& stackSizes,
         unsigned int           dssDCFromTraversal,
         unsigned int           dssDCFromState,
         unsigned int           maxTraceDepth,
         unsigned int           maxCCDepth,
         unsigned int           maxDCDepthFromTraversal,
-        unsigned int           maxDCDepthFromState,
-        unsigned int*          directCallableStackSizeFromTraversal,
-        unsigned int*          directCallableStackSizeFromState,
-        unsigned int*          continuationStackSize
+        unsigned int           maxDCDepthFromState
         )
 {
+    unsigned int directCallableStackSizeFromTraversal;
+    unsigned int directCallableStackSizeFromState;
+    unsigned int continuationStackSize;
+
     PYOPTIX_CHECK(
         optixUtilComputeStackSizesDCSplit(
-            stackSizes,
+            &stackSizes,
             dssDCFromTraversal,
             dssDCFromState,
             maxTraceDepth,
             maxCCDepth,
             maxDCDepthFromTraversal,
             maxDCDepthFromState,
-            directCallableStackSizeFromTraversal,
-            directCallableStackSizeFromState,
-            continuationStackSize
+            &directCallableStackSizeFromTraversal,
+            &directCallableStackSizeFromState,
+            &continuationStackSize
             )
+        );
+
+    return py::make_tuple(
+        directCallableStackSizeFromTraversal,
+        directCallableStackSizeFromState,
+        continuationStackSize
         );
 }
 
 
-void computeStackSizesCssCCTree(
+py::tuple computeStackSizesCssCCTree(
         const OptixStackSizes* stackSizes,
         unsigned int           cssCCTree,
         unsigned int           maxTraceDepth,
-        unsigned int           maxDCDepth,
-        unsigned int*          directCallableStackSizeFromTraversal,
-        unsigned int*          directCallableStackSizeFromState,
-        unsigned int*          continuationStackSize
+        unsigned int           maxDCDepth
         )
 {
+    unsigned int directCallableStackSizeFromTraversal;
+    unsigned int directCallableStackSizeFromState;
+    unsigned int continuationStackSize;
+
     PYOPTIX_CHECK(
         optixUtilComputeStackSizesCssCCTree(
             stackSizes,
             cssCCTree,
             maxTraceDepth,
             maxDCDepth,
-            directCallableStackSizeFromTraversal,
-            directCallableStackSizeFromState,
-            continuationStackSize
+            &directCallableStackSizeFromTraversal,
+            &directCallableStackSizeFromState,
+            &continuationStackSize
             )
+        );
+
+    return py::make_tuple(
+        directCallableStackSizeFromTraversal,
+        directCallableStackSizeFromState,
+        continuationStackSize
         );
 }
 
 
-void computeStackSizesSimplePathTracer(
+py::tuple computeStackSizesSimplePathTracer(
         pyoptix::ProgramGroup        programGroupRG,
         pyoptix::ProgramGroup        programGroupMS1,
-        const pyoptix::ProgramGroup* programGroupCH1,     // TODO: list
-        unsigned int                 programGroupCH1Count,
+        py::list                     programGroupCH1,
         pyoptix::ProgramGroup        programGroupMS2,
-        const pyoptix::ProgramGroup* programGroupCH2,     // TODO: list
-        unsigned int                 programGroupCH2Count,
-        unsigned int*                directCallableStackSizeFromTraversal,
-        unsigned int*                directCallableStackSizeFromState,
-        unsigned int*                continuationStackSize
+        py::list                     programGroupCH2 
         )
 {
+    unsigned int directCallableStackSizeFromTraversal;
+    unsigned int directCallableStackSizeFromState;
+    unsigned int continuationStackSize;
+
+    auto ch1_py = programGroupCH1.cast<std::vector<pyoptix::ProgramGroup> >();
+    auto ch2_py = programGroupCH2.cast<std::vector<pyoptix::ProgramGroup> >();
+    std::vector<OptixProgramGroup> ch1;
+    std::vector<OptixProgramGroup> ch2;
+    for( auto& pypg : ch1_py )
+        ch1.push_back( pypg.programGroup );
+    for( auto pypg : ch2_py )
+        ch2.push_back( pypg.programGroup );
+
     PYOPTIX_CHECK(
         optixUtilComputeStackSizesSimplePathTracer(
             programGroupRG.programGroup,
             programGroupMS1.programGroup,
-            &programGroupCH1->programGroup, // TODO:Fix
-            programGroupCH1Count,
+            ch1.data(),
+            ch1.size(),
             programGroupMS2.programGroup,
-            &programGroupCH2->programGroup, // TODO:Fix
-            programGroupCH2Count,
-            directCallableStackSizeFromTraversal,
-            directCallableStackSizeFromState,
-            continuationStackSize
+            ch2.data(),
+            ch2.size(),
+            &directCallableStackSizeFromTraversal,
+            &directCallableStackSizeFromState,
+            &continuationStackSize
             )
+        );
+
+    return py::make_tuple(
+        directCallableStackSizeFromTraversal,
+        directCallableStackSizeFromState,
+        continuationStackSize
         );
 }
 
@@ -1980,15 +2017,16 @@ PYBIND11_MODULE( optix, m )
         .value( "PIXEL_FORMAT_UCHAR4", OPTIX_PIXEL_FORMAT_UCHAR4 )
         .export_values();
 
-    /*
-    TODO: check for 7.2, temporal in 74
     py::enum_<OptixDenoiserModelKind>(m, "DenoiserModelKind", py::arithmetic())
+#if OPTIX_VERSION < 70300
         .value( "DENOISER_MODEL_KIND_USER", OPTIX_DENOISER_MODEL_KIND_USER )
+#endif
         .value( "DENOISER_MODEL_KIND_LDR", OPTIX_DENOISER_MODEL_KIND_LDR )
         .value( "DENOISER_MODEL_KIND_HDR", OPTIX_DENOISER_MODEL_KIND_HDR )
         .value( "DENOISER_MODEL_KIND_AOV", OPTIX_DENOISER_MODEL_KIND_AOV )
+        IF_OPTIX73( .value( "DENOISER_MODEL_KIND_TEMPORAL", OPTIX_DENOISER_MODEL_KIND_AOV ) )
+        IF_OPTIX74( .value( "DENOISER_MODEL_KIND_TEMPORAL_AOV", OPTIX_DENOISER_MODEL_KIND_AOV ) )
         .export_values();
-        */
 
     py::enum_<OptixRayFlags>(m, "RayFlags", py::arithmetic())
         .value( "RAY_FLAG_NONE", OPTIX_RAY_FLAG_NONE )

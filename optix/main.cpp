@@ -447,6 +447,7 @@ struct ModuleCompileBoundValueEntry
 #if OPTIX_VERSION >= 70400
 struct PayloadType
 {
+    PayloadType() {}
     PayloadType( const py::list&  payload_semantics )
     {
         setPayloadSemantics( payload_semantics );
@@ -644,6 +645,27 @@ struct ProgramGroupDesc
     std::string entryFunctionName2;
     OptixProgramGroupDesc program_group_desc{};
 };
+
+
+#if OPTIX_VERSION >= 70400
+struct ProgramGroupOptions
+{
+    ProgramGroupOptions( const pyoptix::PayloadType& payload_type )
+    {
+        setPayloadType( payload_type );
+    }
+
+    void setPayloadType( const pyoptix::PayloadType& payload_type_ )
+    {
+        payload_type = payload_type_.payload_type;
+        options.payloadType = &payload_type;
+    }
+
+    OptixPayloadType         payload_type{};
+    OptixProgramGroupOptions options{};
+};
+#endif // OPTIX_VERSION >= 70400
+
 
 
 //------------------------------------------------------------------------------
@@ -1083,8 +1105,8 @@ OptixStackSizes programGroupGetStackSize(
 
 py::tuple programGroupCreate(
        pyoptix::DeviceContext          context,
-       const py::list&                 programDescriptions,
-       const OptixProgramGroupOptions& options
+       const py::list&                 programDescriptions
+       IF_OPTIX74( COMMA const OptixProgramGroupOptions& options )
     )
 {
     size_t log_buf_size = LOG_BUFFER_MAX_SIZE;
@@ -1146,6 +1168,10 @@ py::tuple programGroupCreate(
         program_groups_descs.push_back( pydesc.program_group_desc );
     }
     std::vector<OptixProgramGroup> program_groups( programDescriptions.size() );
+
+#if OPTIX_VERSION < 70400
+       const OptixProgramGroupOptions options{};
+#endif
 
     PYOPTIX_CHECK_LOG(
         optixProgramGroupCreate(
@@ -2077,7 +2103,8 @@ PYBIND11_MODULE( optix, m )
 #endif
         .export_values();
 
-    /*
+
+#if OPTIX_VERSION >= 70400
     py::enum_<OptixPayloadTypeID>(m, "PayloadTypeID", py::arithmetic())
         .value( "PAYLOAD_TYPE_DEFAULT", OPTIX_PAYLOAD_TYPE_DEFAULT )
         .value( "PAYLOAD_TYPE_ID_0", OPTIX_PAYLOAD_TYPE_ID_0 )
@@ -2097,7 +2124,7 @@ PYBIND11_MODULE( optix, m )
         .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE )
 
         .value( "PAYLOAD_SEMANTICS_CH_NONE", OPTIX_PAYLOAD_SEMANTICS_CH_NONE )
-        .value( "PAYLOAD_SEMANTICS_CH_READ", OPTIX_PAYLOAD_SEMANTICS_CH_READ )pppppp
+        .value( "PAYLOAD_SEMANTICS_CH_READ", OPTIX_PAYLOAD_SEMANTICS_CH_READ )
         .value( "PAYLOAD_SEMANTICS_CH_WRITE", OPTIX_PAYLOAD_SEMANTICS_CH_WRITE )
         .value( "PAYLOAD_SEMANTICS_CH_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE )
 
@@ -2116,7 +2143,8 @@ PYBIND11_MODULE( optix, m )
         .value( "PAYLOAD_SEMANTICS_IS_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_WRITE )
         .value( "PAYLOAD_SEMANTICS_IS_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_READ_WRITE )
         .export_values();
-    */
+#endif //OPTIX_VERSION >= 70400
+
 
     py::enum_<OptixProgramGroupKind>(m, "ProgramGroupKind", py::arithmetic())
         .value( "PROGRAM_GROUP_KIND_RAYGEN", OPTIX_PROGRAM_GROUP_KIND_RAYGEN )
@@ -2129,8 +2157,7 @@ PYBIND11_MODULE( optix, m )
     py::enum_<OptixProgramGroupFlags>(m, "ProgramGroupFlags", py::arithmetic())
         .value( "PROGRAM_GROUP_FLAGS_NONE", OPTIX_PROGRAM_GROUP_FLAGS_NONE )
         .export_values();
-
-    py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
+py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .value( "EXCEPTION_CODE_STACK_OVERFLOW", OPTIX_EXCEPTION_CODE_STACK_OVERFLOW )
         .value( "EXCEPTION_CODE_TRACE_DEPTH_EXCEEDED", OPTIX_EXCEPTION_CODE_TRACE_DEPTH_EXCEEDED )
         .value( "EXCEPTION_CODE_TRAVERSAL_DEPTH_EXCEEDED", OPTIX_EXCEPTION_CODE_TRAVERSAL_DEPTH_EXCEEDED )
@@ -2239,16 +2266,15 @@ PYBIND11_MODULE( optix, m )
         ;
 
     py::class_<pyoptix::Denoiser>( m, "Denoiser" )
-        // TODO: check for 7.2
-        //.def( "setModel", &pyoptix::denoiserSetModel )
+#if OPTIX_VERSION < 70300
+        .def( "setModel", &pyoptix::denoiserSetModel )
+#endif
         .def( "destroy", &pyoptix::denoiserDestroy )
         .def( "computeMemoryResources", &pyoptix::denoiserComputeMemoryResources )
         .def( "setup", &pyoptix::denoiserSetup )
         .def( "invoke", &pyoptix::denoiserInvoke )
         .def( "computeIntensity", &pyoptix::denoiserComputeIntensity )
-#if OPTIX_VERSION >= 70300
-        .def( "computeAverageColor", &pyoptix::denoiserComputeAverageColor )
-#endif
+        IF_OPTIX73( .def( "computeAverageColor", &pyoptix::denoiserComputeAverageColor ) )
         .def(py::self == py::self)
         ;
 
@@ -2259,13 +2285,12 @@ PYBIND11_MODULE( optix, m )
     //
     //---------------------------------------------------------------------------
 
-#if OPTIX_VERSION >= 70200
     py::class_<pyoptix::DeviceContextOptions>(m, "DeviceContextOptions")
         .def(
             py::init< py::object, int32_t, OptixDeviceContextValidationMode>(),
             py::arg( "logCallbackFunction" )=py::none(),
             py::arg( "logCallbackLevel"    )=0,
-            py::arg( "validationMode"      )=OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF
+            IF_OPTIX72( py::arg( "validationMode" )=OPTIX_DEVICE_CONTEXT_VALIDATION_MODE_OFF )
         )
         .def_property( "logCallbackFunction",
             [](const pyoptix::DeviceContextOptions& self)
@@ -2283,36 +2308,16 @@ PYBIND11_MODULE( optix, m )
             [](pyoptix::DeviceContextOptions& self, int32_t val)
             { self.options.logCallbackLevel = val; }
         )
+#if OPTIX_VERSION >= 70200
         .def_property("validationMode",
             [](const pyoptix::DeviceContextOptions& self)
             { return self.options.validationMode; },
             [](pyoptix::DeviceContextOptions& self, OptixDeviceContextValidationMode val)
             { self.options.validationMode = val; }
-        );
-#elif OPTIX_VERSION <= 70100
-        py::class_<pyoptix::DeviceContextOptions>(m, "DeviceContextOptions")
-        .def(
-            py::init< py::object, int32_t>(),
-            py::arg( "logCallbackFunction" )=py::none(),
-            py::arg( "logCallbackLevel"    )=0
         )
-        .def_property( "logCallbackFunction",
-            [](const pyoptix::DeviceContextOptions& self)
-            { return self.logCallbackFunction; },
-            [](pyoptix::DeviceContextOptions& self, py::object val)
-            {
-                self.logCallbackFunction= val;
-                self.options.logCallbackFunction = pyoptix::context_log_cb;
-                self.options.logCallbackData = val.ptr();
-            }
-        )
-        .def_property("logCallbackLevel",
-            [](const pyoptix::DeviceContextOptions& self)
-            { return self.options.logCallbackLevel;},
-            [](pyoptix::DeviceContextOptions& self, int32_t val)
-            { self.options.logCallbackLevel = val; }
-        );
 #endif
+        ;
+
 
     py::class_<pyoptix::BuildInputTriangleArray>(m, "BuildInputTriangleArray")
         .def(
@@ -2958,56 +2963,6 @@ PYBIND11_MODULE( optix, m )
         ;
 
 
-    /*
-
-    py::class_<pyoptix::ProgramGroupSingleModule>(m, "ProgramGroupSingleModule")
-        .def( py::init([]()
-            { return std::unique_ptr<pyoptix::ProgramGroupSingleModule>(new pyoptix::ProgramGroupSingleModule{} ); }
-        ) )
-        .def_property("module",
-            [](const pyoptix::ProgramGroupSingleModule& self)
-            { return pyoptix::Module{ self.program_group.module }; },
-            [](pyoptix::ProgramGroupSingleModule& self, const pyoptix::Module &val)
-            { self.program_group.module = val.module; }
-        )
-        .def_readwrite( "entryFunctionName", &pyoptix::ProgramGroupSingleModule::entryFunctionName )
-        ;
-
-    py::class_<OptixProgramGroupHitgroup>(m, "ProgramGroupHitgroup")
-        .def( py::init([]() { return std::unique_ptr<OptixProgramGroupHitgroup>(new OptixProgramGroupHitgroup{} ); } ) )
-        .def_property("moduleCH",
-                [](const OptixProgramGroupHitgroup& self) { return pyoptix::Module{ self.moduleCH}; },
-                [](OptixProgramGroupHitgroup& self, const pyoptix::Module &val) { self.moduleCH = val.module; }
-                )
-        .def_readwrite( "entryFunctionNameCH", &OptixProgramGroupHitgroup::entryFunctionNameCH )
-        .def_property("moduleAH",
-                [](const OptixProgramGroupHitgroup& self) { return pyoptix::Module{ self.moduleAH}; },
-                [](OptixProgramGroupHitgroup& self, const pyoptix::Module &val) { self.moduleAH = val.module; }
-                )
-        .def_readwrite( "entryFunctionNameAH", &OptixProgramGroupHitgroup::entryFunctionNameAH )
-        .def_property("moduleIS",
-                [](const OptixProgramGroupHitgroup& self) { return pyoptix::Module{ self.moduleIS}; },
-                [](OptixProgramGroupHitgroup& self, const pyoptix::Module &val) { self.moduleIS = val.module; }
-                )
-        .def_readwrite( "entryFunctionNameIS", &OptixProgramGroupHitgroup::entryFunctionNameIS )
-        ;
-
-    py::class_<OptixProgramGroupCallables>(m, "ProgramGroupCallables")
-        .def( py::init([]() { return std::unique_ptr<OptixProgramGroupCallables>(new OptixProgramGroupCallables{} ); } ) )
-        .def_property("moduleDC",
-                [](const OptixProgramGroupCallables& self) { return pyoptix::Module{ self.moduleDC}; },
-                [](OptixProgramGroupCallables& self, const pyoptix::Module &val) { self.moduleDC = val.module; }
-                )
-        .def_readwrite( "entryFunctionNameDC", &OptixProgramGroupCallables::entryFunctionNameDC )
-        .def_property("moduleCC",
-                [](const OptixProgramGroupCallables& self) { return pyoptix::Module{ self.moduleCC}; },
-                [](OptixProgramGroupCallables& self, const pyoptix::Module &val) { self.moduleCC = val.module; }
-                )
-        .def_readwrite( "entryFunctionNameCC", &OptixProgramGroupCallables::entryFunctionNameCC )
-        ;
-
-    */
-
     py::class_<pyoptix::ProgramGroupDesc>(m, "ProgramGroupDesc")
         .def(
             py::init<
@@ -3203,42 +3158,29 @@ PYBIND11_MODULE( optix, m )
                 self.entryFunctionName2      = name;
             }
         )
-        /*
-        .def_readwrite( "raygenEntryFunctionName", &pyoptix::ProgramGroupDesc::entryFunctionName0 )
-        .def_property( "missModule",
-            []( pyoptix::ProgramGroupDesc& self )
-            { return pyoptix::Module{ self.program_group_desc.miss.module }; },
-            []( pyoptix::ProgramGroupDesc& self, const pyoptix::Module& module )
-            { self.program_group_desc.miss.module = module.module; }
-        )
-        .def_readwrite( "missEntryFunctionName", &pyoptix::ProgramGroupDesc::entryFunctionName0 )
-        */
-        /*
-        .def_readwrite( "flags", &pyoptix::ProgramGroupDesc::flags )
-        .def_property( "raygen",
-                //[](OptixProgramGroupDesc& self) { return pyoptix::ProgramGroupSingleModule{ "", self.raygen }; },
-                [](OptixProgramGroupDesc& self) { return  self.raygen; },
-                nullptr
-                )
-        .def_readwrite( "miss", &OptixProgramGroupDesc::miss )
-        .def_readwrite( "exception", &OptixProgramGroupDesc::exception )
-        .def_readwrite( "callables", &OptixProgramGroupDesc::callables )
-        .def_readwrite( "hitgroup", &OptixProgramGroupDesc::hitgroup )
-        */
         ;
 
-    py::class_<OptixProgramGroupOptions>(m, "ProgramGroupOptions")
-        .def( py::init([]() { return std::unique_ptr<OptixProgramGroupOptions>(new OptixProgramGroupOptions{} ); } ) )
-        /*
+
+#if OPTIX_VERSION >= 70400
+    py::class_<pyoptix::ProgramGroupOptions>(m, "ProgramGroupOptions")
         .def(
-            py::init< OptixPayloadTypeID >(),
-            py::arg( "payloadType" ) = OPTIX_PAYLOAD_TYPE_DEFAULT
-            )
-        .def_readwrite( "payloadType", &OptixProgramGroupOptions::payloadType )
-        */
-        // TODO: check optix version
-        //.def_readwrite( "placeholder", &OptixProgramGroupOptions::placeholder )
+            py::init< 
+                pyoptix::PayloadType
+                >(),
+            py::arg( "payloadType" ) = pyoptix::PayloadType{}
+        )
+        .def_property( "payloadType",
+            // This doesnt do what you probably want it to so disable it
+            //[](const pyoptix::ProgramGroupOptions& self)
+            //{ return self.payload_type; },
+            nullptr,
+            []( pyoptix::ProgramGroupOptions& self, const pyoptix::PayloadType& payload_type )
+            {
+                self.setPayloadType( payload_type );
+            }
+        )
         ;
+#endif // OPTIX_VERSION >= 70400
 
 
     py::class_<pyoptix::PipelineCompileOptions>(m, "PipelineCompileOptions")

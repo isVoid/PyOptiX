@@ -296,7 +296,40 @@ struct BuildInputCustomPrimitiveArray
 
 struct BuildInputInstanceArray
 {
-    OptixBuildInputInstanceArray build_input;
+    BuildInputInstanceArray(
+        CUdeviceptr     instances,
+        CUdeviceptr     instancePointers,
+        unsigned int    numInstances
+        )
+    {
+        if( instances && instancePointers )
+            throw std::runtime_error( 
+                "BuildInputInstanceArray created with both instances and instance pointers" 
+            );
+        build_input.instances = instances;
+        if( instances )
+            setInstances( instances );
+        if( instancePointers )
+            setInstancePointers( instancePointers );
+            
+        build_input.numInstances = numInstances;
+    }
+
+
+    void setInstances( CUdeviceptr instances )
+    {
+        build_type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+        build_input.instances = instances;
+    }
+    
+    void setInstancePointers( CUdeviceptr instances )
+    {
+        build_type = OPTIX_BUILD_INPUT_TYPE_INSTANCE_POINTERS;
+        build_input.instances = instances;
+    }
+
+    OptixBuildInputType          build_type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+    OptixBuildInputInstanceArray build_input{};
 };
 
 
@@ -647,7 +680,6 @@ void convertBuildInputs(
             curve_array.sync();
             build_inputs[idx].type          = OPTIX_BUILD_INPUT_TYPE_CURVES;
             build_inputs[idx].curveArray    = curve_array.build_input;
-            // TODO
         }
 #endif
         else if( py::isinstance<pyoptix::BuildInputCustomPrimitiveArray>( list_elem ) )
@@ -661,7 +693,10 @@ void convertBuildInputs(
         }
         else if( py::isinstance<pyoptix::BuildInputInstanceArray>( list_elem ) )
         {
-            // TODO
+            pyoptix::BuildInputInstanceArray& inst_array = 
+                list_elem.cast<pyoptix::BuildInputInstanceArray&>();
+            build_inputs[idx].type          = inst_array.build_type; 
+            build_inputs[idx].instanceArray = inst_array.build_input;
         }
         else
         {
@@ -2587,11 +2622,38 @@ PYBIND11_MODULE( optix, m )
             )
         ;
 
-    py::class_<OptixBuildInputInstanceArray>(m, "BuildInputInstanceArray")
-        .def( py::init([]() { return std::unique_ptr<OptixBuildInputInstanceArray>(new OptixBuildInputInstanceArray{} ); } ) )
-  //      .def_readwrite( "instances", &OptixBuildInputInstanceArray::instances )
-   //     .def_readwrite( "numInstances", &OptixBuildInputInstanceArray::numInstances )
+
+    py::class_<pyoptix::BuildInputInstanceArray>(m, "BuildInputInstanceArray")
+        .def( 
+            py::init< 
+                CUdeviceptr,
+                CUdeviceptr,
+                unsigned int
+                >(), 
+            py::arg( "instances"        ) = 0u,
+            py::arg( "instancePointers" ) = 0u,
+            py::arg( "numInstances"     ) = 0u
+        )
+        .def_property( "instances",
+            []( const pyoptix::BuildInputInstanceArray& self )
+            { return self.build_input.instances; },
+            [](pyoptix::BuildInputInstanceArray& self, CUdeviceptr val)
+            { self.setInstances( val ); }
+            )
+        .def_property( "instancePointers",
+            []( const pyoptix::BuildInputInstanceArray& self )
+            { return self.build_input.instances; },
+            [](pyoptix::BuildInputInstanceArray& self, CUdeviceptr val)
+            { self.setInstancePointers( val ); }
+            )
+        .def_property( "numInstances", 
+            []( const pyoptix::BuildInputInstanceArray& self ) 
+            { return self.build_input.numInstances; }, 
+            [](pyoptix::BuildInputInstanceArray& self, unsigned int val) 
+            { self.build_input.numInstances = val; }
+            )
         ;
+
 
     py::class_<OptixBuildInput>(m, "BuildInput")
         .def( py::init([]() { return std::unique_ptr<OptixBuildInput>(new OptixBuildInput{} ); } ) )

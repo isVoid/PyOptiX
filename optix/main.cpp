@@ -376,6 +376,56 @@ struct PipelineCompileOptions
 };
 
 
+struct PipelineLinkOptions
+{
+    PipelineLinkOptions(
+        unsigned int maxTraceDepth,
+        OptixCompileDebugLevel debugLevel
+        )
+    {
+        options.maxTraceDepth = maxTraceDepth;
+        options.debugLevel    = debugLevel;
+    }
+
+    OptixPipelineLinkOptions options{};
+};
+
+
+struct ShaderBindingTable
+{
+    ShaderBindingTable(
+        CUdeviceptr  raygenRecord,
+        CUdeviceptr  exceptionRecord,
+        CUdeviceptr  missRecordBase,
+        unsigned int missRecordStrideInBytes,
+        unsigned int missRecordCount,
+        CUdeviceptr  hitgroupRecordBase,
+        unsigned int hitgroupRecordStrideInBytes,
+        unsigned int hitgroupRecordCount,
+        CUdeviceptr  callablesRecordBase,
+        unsigned int callablesRecordStrideInBytes,
+        unsigned int callablesRecordCount
+    )
+    {
+        sbt.raygenRecord                 = raygenRecord;
+        sbt.exceptionRecord              = exceptionRecord;
+        sbt.missRecordBase               = missRecordBase;
+        sbt.missRecordStrideInBytes      = missRecordStrideInBytes;
+        sbt.missRecordCount              = missRecordCount;
+        sbt.hitgroupRecordBase           = hitgroupRecordBase;
+        sbt.hitgroupRecordStrideInBytes  = hitgroupRecordStrideInBytes;
+        sbt.hitgroupRecordCount          = hitgroupRecordCount;
+        sbt.callablesRecordBase          = callablesRecordBase;
+        sbt.callablesRecordStrideInBytes = callablesRecordStrideInBytes;
+        sbt.callablesRecordCount         = callablesRecordCount;
+    }
+
+
+
+    OptixShaderBindingTable sbt;
+};
+
+
 #if OPTIX_VERSION >= 70200
 struct ModuleCompileBoundValueEntry
 {
@@ -463,7 +513,10 @@ struct PayloadType
     void sync()
     {
         payload_type.numPayloadValues = payload_semantics.size();
-        payload_type.payloadSemantics = payload_semantics.data();
+        if( !payload_semantics.empty() )
+            payload_type.payloadSemantics = payload_semantics.data();
+        else 
+            payload_type.payloadSemantics = nullptr; 
     }
 
 
@@ -521,10 +574,12 @@ struct ModuleCompileOptions
             payloadTypes.push_back( pypt.payload_type);
         }
 
+        std::cerr << "*****PAYLOAD TYPES SIZE: " << payloadTypes.size() << std::endl;
         options.payloadTypes    = payloadTypes.empty() ?
                                  nullptr             :
                                  payloadTypes.data();
         options.numPayloadTypes= static_cast<uint32_t>( payloadTypes.size() );
+        std::cerr << "*****numPAYLOAD TYPES : " << options.numPayloadTypes << std::endl;
 #endif
     }
 
@@ -652,13 +707,16 @@ struct ProgramGroupOptions
 {
     ProgramGroupOptions( const pyoptix::PayloadType& payload_type )
     {
-        setPayloadType( payload_type );
+         setPayloadType( payload_type );
     }
 
     void setPayloadType( const pyoptix::PayloadType& payload_type_ )
     {
         payload_type = payload_type_.payload_type;
-        options.payloadType = &payload_type;
+        if( payload_type.numPayloadValues> 0 )
+            options.payloadType = &payload_type;
+        else
+            options.payloadType = nullptr; 
     }
 
     OptixPayloadType         payload_type{};
@@ -957,7 +1015,7 @@ py::tuple deviceContextGetCacheDatabaseSizes(
 pyoptix::Pipeline pipelineCreate(
        pyoptix::DeviceContext                 context,
        const pyoptix::PipelineCompileOptions& pipelineCompileOptions,
-       const OptixPipelineLinkOptions&        pipelineLinkOptions,
+       const pyoptix::PipelineLinkOptions&    pipelineLinkOptions,
        const py::list&                        programGroups,
        std::string&                           logString
     )
@@ -978,7 +1036,7 @@ pyoptix::Pipeline pipelineCreate(
         optixPipelineCreate(
             context.deviceContext,
             &pipelineCompileOptions.options,
-            &pipelineLinkOptions,
+            &pipelineLinkOptions.options,
             pgs.data(),
             static_cast<uint32_t>( pgs.size() ),
             log_buf,
@@ -1104,9 +1162,9 @@ OptixStackSizes programGroupGetStackSize(
 }
 
 py::tuple programGroupCreate(
-       pyoptix::DeviceContext          context,
-       const py::list&                 programDescriptions
-       IF_OPTIX74( COMMA const OptixProgramGroupOptions& options )
+       pyoptix::DeviceContext context,
+       const py::list&        programDescriptions
+       IF_OPTIX74( COMMA const pyoptix::ProgramGroupOptions& options )
     )
 {
     size_t log_buf_size = LOG_BUFFER_MAX_SIZE;
@@ -1170,7 +1228,9 @@ py::tuple programGroupCreate(
     std::vector<OptixProgramGroup> program_groups( programDescriptions.size() );
 
 #if OPTIX_VERSION < 70400
-       const OptixProgramGroupOptions options{};
+       const OptixProgramGroupOptions opts{};
+#else
+       const OptixProgramGroupOptions& opts = options.options;
 #endif
 
     PYOPTIX_CHECK_LOG(
@@ -1178,7 +1238,7 @@ py::tuple programGroupCreate(
             context.deviceContext,
             program_groups_descs.data(),
             static_cast<uint32_t>( program_groups_descs.size() ),
-            &options,
+            &opts,
             log_buf,
             &log_buf_size,
             program_groups.data()
@@ -1208,27 +1268,19 @@ void launch(
        uintptr_t                      stream,
        CUdeviceptr                    pipelineParams,
        size_t                         pipelineParamsSize,
-       const OptixShaderBindingTable& sbt,
+       const pyoptix::ShaderBindingTable& sbt,
        uint32_t                       width,
        uint32_t                       height,
        uint32_t                       depth
     )
 {
-    char buf[128];
-    cudaError res = cudaMemcpy(
-        buf,
-    (void*)sbt.raygenRecord,
-    48,
-    cudaMemcpyDeviceToHost
-    );
-    res = cudaMemcpy( buf, (void*)sbt.missRecordBase, 48, cudaMemcpyDeviceToHost );
     PYOPTIX_CHECK(
         optixLaunch(
             pipeline.pipeline,
             reinterpret_cast<CUstream>( stream ),
             pipelineParams,
             pipelineParamsSize,
-            &sbt,
+            &sbt.sbt,
             width,
             height,
             depth
@@ -1254,8 +1306,8 @@ void sbtRecordPackHeader(
 
 OptixAccelBufferSizes accelComputeMemoryUsage(
        pyoptix::DeviceContext   context,
-       const py::list&          accelOptions, // OptixAccelBuildOptions*
-       const py::list&          buildInputs   // OptixBuildInput*
+       const py::list&          accelOptions, 
+       const py::list&          buildInputs    
     )
 {
     const uint32_t num_inputs = buildInputs.size();
@@ -1285,13 +1337,13 @@ OptixAccelBufferSizes accelComputeMemoryUsage(
 OptixTraversableHandle accelBuild(
        pyoptix::DeviceContext        context,
        uintptr_t                     stream,
-       const py::list&               accelOptions, // OptixAccelBuildOptions*
-       const py::list&               buildInputs,  // OptixBuildInput*
+       const py::list&               accelOptions, //AccelBuildOptions
+       const py::list&               buildInputs,  // 
        CUdeviceptr                   tempBuffer,
        size_t                        tempBufferSizeInBytes,
        CUdeviceptr                   outputBuffer,
        size_t                        outputBufferSizeInBytes,
-       const py::list&               emittedProperties // OptixAccelEmitDesc*
+       const py::list&               emittedProperties // AccelEmitDesc
     )
 {
     const uint32_t num_inputs = buildInputs.size();
@@ -2113,7 +2165,7 @@ PYBIND11_MODULE( optix, m )
         .value( "PAYLOAD_TYPE_ID_3", OPTIX_PAYLOAD_TYPE_ID_3 )
         .value( "PAYLOAD_TYPE_ID_4", OPTIX_PAYLOAD_TYPE_ID_4 )
         .value( "PAYLOAD_TYPE_ID_5", OPTIX_PAYLOAD_TYPE_ID_5 )
-        .value( "PAYLOAD_TYPE_ID_5", OPTIX_PAYLOAD_TYPE_ID_6 )
+        .value( "PAYLOAD_TYPE_ID_6", OPTIX_PAYLOAD_TYPE_ID_6 )
         .value( "PAYLOAD_TYPE_ID_7", OPTIX_PAYLOAD_TYPE_ID_7 )
         .export_values();
 
@@ -2191,6 +2243,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .export_values();
 
 
+    /*
 #if OPTIX_VERSION >= 70400
     py::enum_<OptixPayloadSemantics>(m, "PayloadSemantics", py::arithmetic())
         .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_NONE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_NONE )
@@ -2214,6 +2267,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .value( "PAYLOAD_SEMANTICS_IS_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_READ_WRITE )
         .export_values();
 #endif
+*/
 
 
     //---------------------------------------------------------------------------
@@ -2575,6 +2629,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
 #endif // OPTIX_VERSION > 70100
 
 
+    /* NOTE: Not very useful in python host-side
     py::class_<OptixAabb>(m, "Aabb")
         .def( py::init([]() { return std::unique_ptr<OptixAabb>(new OptixAabb{} ); } ) )
         .def_readwrite( "minX", &OptixAabb::minX )
@@ -2584,6 +2639,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .def_readwrite( "maxY", &OptixAabb::maxY )
         .def_readwrite( "maxZ", &OptixAabb::maxZ )
         ;
+    */
 
 
     py::class_<pyoptix::BuildInputCustomPrimitiveArray>(m, "BuildInputCustomPrimitiveArray")
@@ -2698,6 +2754,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         ;
 
 
+    /* NOTE: Wrapper type OptixBuildInput not used in python bindings
     py::class_<OptixBuildInput>(m, "BuildInput")
         .def( py::init([]() { return std::unique_ptr<OptixBuildInput>(new OptixBuildInput{} ); } ) )
         .def_readwrite( "type", &OptixBuildInput::type )
@@ -2710,6 +2767,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
 #endif
         .def_readwrite( "instanceArray", &OptixBuildInput::instanceArray )
         ;
+    */
 
     py::class_<OptixInstance>(m, "Instance")
         .def( py::init([]() { return std::unique_ptr<OptixInstance>(new OptixInstance{} ); } ) )
@@ -3246,25 +3304,125 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
 #endif
         ;
 
-    py::class_<OptixPipelineLinkOptions>(m, "PipelineLinkOptions")
-        .def( py::init([]() { return std::unique_ptr<OptixPipelineLinkOptions>(new OptixPipelineLinkOptions{} ); } ) )
-        .def_readwrite( "maxTraceDepth", &OptixPipelineLinkOptions::maxTraceDepth )
-        .def_readwrite( "debugLevel", &OptixPipelineLinkOptions::debugLevel )
+    py::class_<pyoptix::PipelineLinkOptions>(m, "PipelineLinkOptions")
+        .def(
+            py::init<
+                uint32_t,
+                OptixCompileDebugLevel
+                >(),
+            py::arg( "maxTraceDepth" ) = 0u,
+            py::arg( "debugLevel"       ) = 
+            IF_OPTIX71_ELSE( 
+                OPTIX_COMPILE_DEBUG_LEVEL_DEFAULT, OPTIX_COMPILE_DEBUG_LEVEL_LINEINFO 
+                )
+            )
+        .def_property( "maxTraceDepth",
+            [](const pyoptix::PipelineLinkOptions& self)
+            { return self.options.maxTraceDepth; },
+            [](pyoptix::PipelineLinkOptions& self, uint32_t val)
+            { self.options.maxTraceDepth = val; }
+            )
+        .def_property( "debugLevel",
+            [](const pyoptix::PipelineLinkOptions& self)
+            { return self.options.debugLevel; },
+            [](pyoptix::PipelineLinkOptions& self, OptixCompileDebugLevel val)
+            { self.options.debugLevel = val; }
+            )
         ;
 
-    py::class_<OptixShaderBindingTable>(m, "ShaderBindingTable")
-        .def( py::init([]() { return std::unique_ptr<OptixShaderBindingTable>(new OptixShaderBindingTable{} ); } ) )
-        .def_readwrite( "raygenRecord", &OptixShaderBindingTable::raygenRecord )
-        .def_readwrite( "exceptionRecord", &OptixShaderBindingTable::exceptionRecord )
-        .def_readwrite( "missRecordBase", &OptixShaderBindingTable::missRecordBase )
-        .def_readwrite( "missRecordStrideInBytes", &OptixShaderBindingTable::missRecordStrideInBytes )
-        .def_readwrite( "missRecordCount", &OptixShaderBindingTable::missRecordCount )
-        .def_readwrite( "hitgroupRecordBase", &OptixShaderBindingTable::hitgroupRecordBase )
-        .def_readwrite( "hitgroupRecordStrideInBytes", &OptixShaderBindingTable::hitgroupRecordStrideInBytes )
-        .def_readwrite( "hitgroupRecordCount", &OptixShaderBindingTable::hitgroupRecordCount )
-        .def_readwrite( "callablesRecordBase", &OptixShaderBindingTable::callablesRecordBase )
-        .def_readwrite( "callablesRecordStrideInBytes", &OptixShaderBindingTable::callablesRecordStrideInBytes )
-        .def_readwrite( "callablesRecordCount", &OptixShaderBindingTable::callablesRecordCount )
+    py::class_<pyoptix::ShaderBindingTable>(m, "ShaderBindingTable")
+        .def(
+            py::init<
+                CUdeviceptr,
+                CUdeviceptr,
+                CUdeviceptr,
+                uint32_t,
+                uint32_t,
+                CUdeviceptr,
+                uint32_t,
+                uint32_t,
+                CUdeviceptr,
+                uint32_t,
+                uint32_t
+                >(),
+            py::arg( "raygenRecord"            ) = 0,
+            py::arg( "exceptionRecord"         ) = 0,
+            py::arg( "missRecordBase"          ) = 0,
+            py::arg( "missRecordStrideInBytes" ) = 0,
+            py::arg( "missRecordCount"         ) = 0,
+            py::arg( "hitgroupRecordBase"          ) = 0,
+            py::arg( "hitgroupRecordStrideInBytes" ) = 0,
+            py::arg( "hitgroupRecordCount"         ) = 0,
+            py::arg( "callablesRecordBase"          ) = 0,
+            py::arg( "callablesRecordStrideInBytes" ) = 0,
+            py::arg( "callablesRecordCount"         ) = 0
+            )
+        .def_property( "raygenRecord",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.raygenRecord; },
+            [](pyoptix::ShaderBindingTable& self, CUdeviceptr val)
+            { self.sbt.raygenRecord = val; }
+            )
+        .def_property( "exceptionRecord",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.exceptionRecord; },
+            [](pyoptix::ShaderBindingTable& self, CUdeviceptr val)
+            { self.sbt.exceptionRecord = val; }
+            )
+        .def_property( "missRecordBase",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.missRecordBase; },
+            [](pyoptix::ShaderBindingTable& self, CUdeviceptr val)
+            { self.sbt.missRecordBase = val; }
+            )
+        .def_property( "missRecordStrideInBytes",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.missRecordStrideInBytes; },
+            [](pyoptix::ShaderBindingTable& self, uint32_t val)
+            { self.sbt.missRecordStrideInBytes = val; }
+            )
+        .def_property( "missRecordCount",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.missRecordCount; },
+            [](pyoptix::ShaderBindingTable& self, uint32_t val)
+            { self.sbt.missRecordCount = val; }
+            )
+        .def_property( "hitgroupRecordBase",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.hitgroupRecordBase; },
+            [](pyoptix::ShaderBindingTable& self, CUdeviceptr val)
+            { self.sbt.hitgroupRecordBase = val; }
+            )
+        .def_property( "hitgroupRecordStrideInBytes",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.hitgroupRecordStrideInBytes; },
+            [](pyoptix::ShaderBindingTable& self, uint32_t val)
+            { self.sbt.hitgroupRecordStrideInBytes = val; }
+            )
+        .def_property( "hitgroupRecordCount",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.hitgroupRecordCount; },
+            [](pyoptix::ShaderBindingTable& self, uint32_t val)
+            { self.sbt.hitgroupRecordCount = val; }
+            )
+        .def_property( "callablesRecordBase",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.callablesRecordBase; },
+            [](pyoptix::ShaderBindingTable& self, CUdeviceptr val)
+            { self.sbt.callablesRecordBase = val; }
+            )
+        .def_property( "callablesRecordStrideInBytes",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.callablesRecordStrideInBytes; },
+            [](pyoptix::ShaderBindingTable& self, uint32_t val)
+            { self.sbt.callablesRecordStrideInBytes = val; }
+            )
+        .def_property( "callablesRecordCount",
+            [](const pyoptix::ShaderBindingTable& self)
+            { return self.sbt.callablesRecordCount; },
+            [](pyoptix::ShaderBindingTable& self, uint32_t val)
+            { self.sbt.callablesRecordCount = val; }
+            )
         ;
 
     py::class_<OptixStackSizes>(m, "StackSizes")

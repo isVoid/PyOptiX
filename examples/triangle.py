@@ -234,7 +234,6 @@ def create_program_groups( ctx, module ):
             program_group_options,
             )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
-    
 
     hitgroup_prog_group_desc                             = optix.ProgramGroupDesc()
     hitgroup_prog_group_desc.hitgroupModuleCH            = module
@@ -244,7 +243,6 @@ def create_program_groups( ctx, module ):
             program_group_options,
             )
     print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
-
 
     return [ raygen_prog_group[0], miss_prog_group[0], hitgroup_prog_group[0] ]
 

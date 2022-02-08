@@ -52,6 +52,14 @@ def  get_aligned_itemsize( formats, alignment ):
     return round_up( temp_dtype.itemsize, alignment )
 
 
+def optix_version_gte( version ):
+    if optix.version()[0] >  version[0]:
+        return True
+    if optix.version()[0] == version[0] and optix.version()[1] >= version[1]:
+        return True
+    return False
+
+
 def array_to_device_memory( numpy_array, stream=cp.cuda.Stream() ):
 
     byte_size = numpy_array.size*numpy_array.dtype.itemsize
@@ -215,33 +223,55 @@ def create_module( ctx, pipeline_options, triangle_ptx ):
 def create_program_groups( ctx, module ):
     print( "Creating program groups ... " )
 
-    program_group_options = optix.ProgramGroupOptions()
-
     raygen_prog_group_desc                          = optix.ProgramGroupDesc()
     raygen_prog_group_desc.raygenModule             = module
     raygen_prog_group_desc.raygenEntryFunctionName  = "__raygen__rg"
-    raygen_prog_group, log = ctx.programGroupCreate(
-            [ raygen_prog_group_desc ], 
-            program_group_options,
-            )
+
+    log = None
+    raygen_prog_group = None
+    if optix_version_gte( (7,4) ):
+        program_group_options = optix.ProgramGroupOptions() 
+        raygen_prog_group, log = ctx.programGroupCreate(
+                [ raygen_prog_group_desc ], 
+                program_group_options,
+                )
+    else:
+        raygen_prog_group, log = ctx.programGroupCreate(
+                [ raygen_prog_group_desc ]
+                )
     print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
     
     miss_prog_group_desc                        = optix.ProgramGroupDesc()
     miss_prog_group_desc.missModule             = module
     miss_prog_group_desc.missEntryFunctionName  = "__miss__ms"
-    miss_prog_group, log = ctx.programGroupCreate(
-            [ miss_prog_group_desc ], 
-            program_group_options,
-            )
+    miss_prog_group = None
+    if optix_version_gte( (7,4) ):
+        program_group_options = optix.ProgramGroupOptions() 
+        miss_prog_group, log = ctx.programGroupCreate(
+                [ miss_prog_group_desc ],
+                program_group_options
+                )
+    else:
+        miss_prog_group, log = ctx.programGroupCreate( 
+                [ miss_prog_group_desc ] 
+                )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
     hitgroup_prog_group_desc                             = optix.ProgramGroupDesc()
     hitgroup_prog_group_desc.hitgroupModuleCH            = module
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameCH = "__closesthit__ch"
-    hitgroup_prog_group, log = ctx.programGroupCreate(
-            [ hitgroup_prog_group_desc ], 
-            program_group_options,
-            )
+
+    hitgroup_prog_group = None
+    if optix_version_gte( (7,4) ):
+        program_group_options = optix.ProgramGroupOptions() 
+        hitgroup_prog_group, log = ctx.programGroupCreate(
+                [ hitgroup_prog_group_desc ], 
+                program_group_options,
+                )
+    else:
+        hitgroup_prog_group, log = ctx.programGroupCreate(
+                [ hitgroup_prog_group_desc ]
+                )
     print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
 
     return [ raygen_prog_group[0], miss_prog_group[0], hitgroup_prog_group[0] ]

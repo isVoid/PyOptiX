@@ -5,13 +5,15 @@ import array
 import pytest
 
 import sample_ptx
+import tutil
 
 
-class TestProgramGroupOptions:
-    def test_constructor(self):
-        pgo = ox.ProgramGroupOptions()
-        assert type(pgo) is ox.ProgramGroupOptions
-        # ProgramGroupOptions is an empty data type. There is nothing to test here (yet).
+
+if tutil.optix_version_gte( (7,4) ): 
+    class TestProgramGroupOptions:
+        def test_constructor(self):
+            pgo = ox.ProgramGroupOptions()
+            assert type(pgo) is ox.ProgramGroupOptions
 
 
 class TestProgramGroupBase:
@@ -43,33 +45,43 @@ class TestProgramGroupDescriptor(TestProgramGroupBase):
 
 class TestProgramGroup(TestProgramGroupBase):
     def test_create_raygen(self):
-        prog_group_opts = ox.ProgramGroupOptions()
 
         prog_group_desc                          = ox.ProgramGroupDesc()
         prog_group_desc.raygenModule             = self.mod
         prog_group_desc.raygenEntryFunctionName  = "__raygen__hello"
 
-        prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        prog_groups = None
+        log         = None
+        if tutil.optix_version_gte( (7,4) ): 
+            prog_group_opts = ox.ProgramGroupOptions()
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        else:
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc] )
         assert len(prog_groups) == 1
         assert type(prog_groups[0]) is ox.ProgramGroup
 
         prog_groups[0].destroy()
 
     def test_create_miss(self):
-        prog_group_opts = ox.ProgramGroupOptions()
 
         prog_group_desc                        = ox.ProgramGroupDesc()
         prog_group_desc.missModule             = self.mod
         prog_group_desc.missEntryFunctionName  = "__miss__noop"
 
-        prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        prog_groups = None
+        log         = None
+        if tutil.optix_version_gte( (7,4) ): 
+            prog_group_opts = ox.ProgramGroupOptions()
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        else:
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc] )
+
         assert len(prog_groups) == 1
         assert type(prog_groups[0]) is ox.ProgramGroup
 
         prog_groups[0].destroy()
 
     def test_create_callables(self):
-        prog_group_opts = ox.ProgramGroupOptions()
 
         prog_group_desc                               = ox.ProgramGroupDesc()
         prog_group_desc.callablesModuleDC             = self.mod
@@ -77,15 +89,20 @@ class TestProgramGroup(TestProgramGroupBase):
         prog_group_desc.callablesEntryFunctionNameCC  = "__continuation_callable__noop"
         prog_group_desc.callablesEntryFunctionNameDC  = "__direct_callable__noop"
 
-        prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        prog_groups = None
+        log         = None
+        if tutil.optix_version_gte( (7,4) ): 
+            prog_group_opts = ox.ProgramGroupOptions()
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        else:
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc] )
+
         assert len(prog_groups) == 1
         assert type(prog_groups[0]) is ox.ProgramGroup
 
         prog_groups[0].destroy()
 
     def test_create_hitgroup(self):
-        prog_group_opts = ox.ProgramGroupOptions()
-
         prog_group_desc                              = ox.ProgramGroupDesc()
         prog_group_desc.hitgroupModuleCH             = self.mod
         prog_group_desc.hitgroupModuleAH             = self.mod
@@ -94,20 +111,32 @@ class TestProgramGroup(TestProgramGroupBase):
         prog_group_desc.hitgroupEntryFunctionNameAH  = "__anyhit__noop"
         prog_group_desc.hitgroupEntryFunctionNameIS  = "__intersection__noop"
 
-        prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        prog_groups = None
+        log         = None
+        if tutil.optix_version_gte( (7,4) ): 
+            prog_group_opts = ox.ProgramGroupOptions()
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        else:
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc] )
+
         assert len(prog_groups) == 1
         assert type(prog_groups[0]) is ox.ProgramGroup
 
         prog_groups[0].destroy()
 
     def create_prog_group(self):
-        prog_group_opts = ox.ProgramGroupOptions()
 
         prog_group_desc                          = ox.ProgramGroupDesc()
         prog_group_desc.raygenModule             = self.mod
         prog_group_desc.raygenEntryFunctionName  = "__raygen__hello"
 
-        prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        prog_groups = None
+        log         = None
+        if tutil.optix_version_gte( (7,4) ): 
+            prog_group_opts = ox.ProgramGroupOptions()
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc], prog_group_opts)
+        else:
+            prog_groups, log = self.ctx.programGroupCreate([prog_group_desc] )
         return prog_groups[0]
 
     def test_get_stack_size(self):

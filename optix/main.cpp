@@ -152,7 +152,7 @@ struct DeviceContextOptions
 
     // Log callback needs additional backing
     py::object logCallbackFunction;
-    OptixDeviceContextOptions options;
+    OptixDeviceContextOptions options{};
 };
 
 
@@ -206,7 +206,7 @@ struct BuildInputTriangleArray
 
     std::vector<unsigned int> flags;
     std::vector<CUdeviceptr>  vertexBuffers;
-    OptixBuildInputTriangleArray build_input;
+    OptixBuildInputTriangleArray build_input{};
 };
 
 
@@ -256,7 +256,7 @@ struct BuildInputCurveArray
     std::vector<CUdeviceptr>  vertexBuffers;
     std::vector<CUdeviceptr>  widthBuffers;
     std::vector<CUdeviceptr>  normalBuffers;
-    OptixBuildInputCurveArray build_input;
+    OptixBuildInputCurveArray build_input{};
 };
 #endif // OPTIX_VERSION >= 70200
 
@@ -296,7 +296,7 @@ struct BuildInputCustomPrimitiveArray
 
     std::vector<unsigned int> flags;
     std::vector<CUdeviceptr>  aabbBuffers;
-    OptixBuildInputCustomPrimitiveArray build_input;
+    OptixBuildInputCustomPrimitiveArray build_input{};
 };
 
 
@@ -372,7 +372,7 @@ struct PipelineCompileOptions
 
     // Strings need extra backing
     std::string pipelineLaunchParamsVariableName;
-    OptixPipelineCompileOptions options;
+    OptixPipelineCompileOptions options{};
 };
 
 
@@ -422,7 +422,7 @@ struct ShaderBindingTable
 
 
 
-    OptixShaderBindingTable sbt;
+    OptixShaderBindingTable sbt{};
 };
 
 
@@ -514,7 +514,7 @@ struct ModuleCompileBoundValueEntry
     }
 
 
-    OptixModuleCompileBoundValueEntry entry;
+    OptixModuleCompileBoundValueEntry entry{};
     std::string            annotation;
     std::vector<std::byte> value;
 };
@@ -563,6 +563,7 @@ struct ModuleCompileOptions
         IF_OPTIX74( COMMA std::vector<pyoptix::PayloadType>&& payload_types )
         )
     {
+        memset(&options, 0, sizeof(OptixModuleCompileOptions));
         options.maxRegisterCount = maxRegisterCount;
         options.optLevel         = optLevel;
         options.debugLevel       = debugLevel;
@@ -579,6 +580,7 @@ struct ModuleCompileOptions
 
     void sync()
     {
+        return;
 #if OPTIX_VERSION >= 70200
         boundValues.clear();
         for( auto& pybve : pyboundValues )
@@ -601,12 +603,10 @@ struct ModuleCompileOptions
             payloadTypes.push_back( pypt.payload_type);
         }
 
-        std::cerr << "*****PAYLOAD TYPES SIZE: " << payloadTypes.size() << std::endl;
         options.payloadTypes    = payloadTypes.empty() ?
                                  nullptr             :
                                  payloadTypes.data();
         options.numPayloadTypes= static_cast<uint32_t>( payloadTypes.size() );
-        std::cerr << "*****numPAYLOAD TYPES : " << options.numPayloadTypes << std::endl;
 #endif
     }
 
@@ -639,7 +639,7 @@ struct BuiltinISOptions
         IF_OPTIX74( options.buildFlags       = buildFlags; )
         IF_OPTIX74( options.curveEndcapFlags = curveEndcapFlags; )
     }
-    OptixBuiltinISOptions options;
+    OptixBuiltinISOptions options{};
 };
 #endif
 
@@ -912,8 +912,7 @@ py::object deviceContextGetProperty(
         case OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCES_PER_IAS:
         case OPTIX_DEVICE_PROPERTY_RTCORE_VERSION:
         case OPTIX_DEVICE_PROPERTY_LIMIT_MAX_INSTANCE_ID:
-        case OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK:
-        case OPTIX_DEVICE_PROPERTY_LIMIT_MAX_SBT_RECORDS_PER_GAS:
+        case OPTIX_DEVICE_PROPERTY_LIMIT_NUM_BITS_INSTANCE_VISIBILITY_MASK: case OPTIX_DEVICE_PROPERTY_LIMIT_MAX_SBT_RECORDS_PER_GAS:
         case OPTIX_DEVICE_PROPERTY_LIMIT_MAX_SBT_OFFSET:
         {
             uint32_t value = 0u;
@@ -2282,33 +2281,6 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .export_values();
 
 
-    /*
-#if OPTIX_VERSION >= 70400
-    py::enum_<OptixPayloadSemantics>(m, "PayloadSemantics", py::arithmetic())
-        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_NONE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_NONE )
-        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_READ", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ )
-        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_WRITE )
-        .value( "PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_TRACE_CALLER_READ_WRITE )
-        .value( "PAYLOAD_SEMANTICS_CH_READ", OPTIX_PAYLOAD_SEMANTICS_CH_READ )
-        .value( "PAYLOAD_SEMANTICS_CH_WRITE", OPTIX_PAYLOAD_SEMANTICS_CH_WRITE )
-        .value( "PAYLOAD_SEMANTICS_CH_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_CH_READ_WRITE )
-        .value( "PAYLOAD_SEMANTICS_MS_NONE", OPTIX_PAYLOAD_SEMANTICS_MS_NONE )
-        .value( "PAYLOAD_SEMANTICS_MS_READ", OPTIX_PAYLOAD_SEMANTICS_MS_READ )
-        .value( "PAYLOAD_SEMANTICS_MS_WRITE", OPTIX_PAYLOAD_SEMANTICS_MS_WRITE )
-        .value( "PAYLOAD_SEMANTICS_MS_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_MS_READ_WRITE )
-        .value( "PAYLOAD_SEMANTICS_AH_NONE", OPTIX_PAYLOAD_SEMANTICS_AH_NONE )
-        .value( "PAYLOAD_SEMANTICS_AH_READ", OPTIX_PAYLOAD_SEMANTICS_AH_READ )
-        .value( "PAYLOAD_SEMANTICS_AH_WRITE", OPTIX_PAYLOAD_SEMANTICS_AH_WRITE )
-        .value( "PAYLOAD_SEMANTICS_AH_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_AH_READ_WRITE )
-        .value( "PAYLOAD_SEMANTICS_IS_NONE", OPTIX_PAYLOAD_SEMANTICS_IS_NONE )
-        .value( "PAYLOAD_SEMANTICS_IS_READ", OPTIX_PAYLOAD_SEMANTICS_IS_READ )
-        .value( "PAYLOAD_SEMANTICS_IS_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_WRITE )
-        .value( "PAYLOAD_SEMANTICS_IS_READ_WRITE", OPTIX_PAYLOAD_SEMANTICS_IS_READ_WRITE )
-        .export_values();
-#endif
-*/
-
-
     //---------------------------------------------------------------------------
     //
     // Opaque types
@@ -2848,12 +2820,14 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .def_readwrite( "motionOptions", &OptixAccelBuildOptions::motionOptions )
         ;
 
+
     py::class_<OptixAccelBufferSizes>(m, "AccelBufferSizes")
         .def( py::init([]() { return std::unique_ptr<OptixAccelBufferSizes>(new OptixAccelBufferSizes{} ); } ) )
         .def_readwrite( "outputSizeInBytes", &OptixAccelBufferSizes::outputSizeInBytes )
         .def_readwrite( "tempSizeInBytes", &OptixAccelBufferSizes::tempSizeInBytes )
         .def_readwrite( "tempUpdateSizeInBytes", &OptixAccelBufferSizes::tempUpdateSizeInBytes )
         ;
+
 
     py::class_<OptixAccelEmitDesc>(m, "AccelEmitDesc")
         .def( py::init([]() { return std::unique_ptr<OptixAccelEmitDesc>(new OptixAccelEmitDesc{} ); } ) )

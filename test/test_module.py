@@ -131,6 +131,7 @@ class TestModule:
         ctx.destroy()
             
 
+if tutil.optix_version_gte( (7,4) ): 
     def test_payload_semantics_use( self ):
         ctx = optix.deviceContextCreate(0, optix.DeviceContextOptions())
         module_opts   = optix.ModuleCompileOptions()

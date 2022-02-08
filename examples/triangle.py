@@ -342,15 +342,15 @@ def create_sbt( prog_groups ):
     global d_hitgroup_sbt
     d_hitgroup_sbt = array_to_device_memory( h_hitgroup_sbt )
     
-    sbt = optix.ShaderBindingTable()
-    sbt.raygenRecord                = d_raygen_sbt.ptr
-    sbt.missRecordBase              = d_miss_sbt.ptr
-    sbt.missRecordStrideInBytes     = d_miss_sbt.mem.size
-    sbt.missRecordCount             = 1
-    sbt.hitgroupRecordBase          = d_hitgroup_sbt.ptr
-    sbt.hitgroupRecordStrideInBytes = d_hitgroup_sbt.mem.size
-    sbt.hitgroupRecordCount         = 1
-    return sbt
+    return optix.ShaderBindingTable(
+        raygenRecord                = d_raygen_sbt.ptr,
+        missRecordBase              = d_miss_sbt.ptr,
+        missRecordStrideInBytes     = d_miss_sbt.mem.size,
+        missRecordCount             = 1,
+        hitgroupRecordBase          = d_hitgroup_sbt.ptr,
+        hitgroupRecordStrideInBytes = d_hitgroup_sbt.mem.size,
+        hitgroupRecordCount         = 1
+    )
 
 
 def launch( pipeline, sbt, trav_handle ):

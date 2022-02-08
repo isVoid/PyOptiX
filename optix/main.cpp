@@ -426,6 +426,33 @@ struct ShaderBindingTable
 };
 
 
+struct StackSizes
+{
+    StackSizes() {}
+
+    StackSizes(
+        unsigned int cssRG,
+        unsigned int cssMS,
+        unsigned int cssCH,
+        unsigned int cssAH,
+        unsigned int cssIS,
+        unsigned int cssCC,
+        unsigned int dssDC
+        )
+    {
+        ss.cssRG = cssRG;
+        ss.cssMS = cssMS;
+        ss.cssCH = cssCH;
+        ss.cssAH = cssAH;
+        ss.cssIS = cssIS;
+        ss.cssCC = cssCC;
+        ss.dssDC = dssDC;
+    }
+
+    OptixStackSizes ss{}; 
+};
+
+
 #if OPTIX_VERSION >= 70200
 struct ModuleCompileBoundValueEntry
 {
@@ -600,6 +627,18 @@ struct ModuleCompileOptions
 #if OPTIX_VERSION >= 70100
 struct BuiltinISOptions
 {
+    BuiltinISOptions(
+        OptixPrimitiveType              builtinISModuleType,
+        int                             usesMotionBlur
+        IF_OPTIX74( COMMA unsigned int  buildFlags )
+        IF_OPTIX74( COMMA unsigned int  curveEndcapFlags )
+        )
+    {
+        options.builtinISModuleType          = builtinISModuleType;
+        options.usesMotionBlur               = usesMotionBlur;
+        IF_OPTIX74( options.buildFlags       = buildFlags; )
+        IF_OPTIX74( options.curveEndcapFlags = curveEndcapFlags; )
+    }
     OptixBuiltinISOptions options;
 };
 #endif
@@ -1147,15 +1186,15 @@ pyoptix::Module builtinISModuleGet(
 #endif // OPTIX_VERSION >= 70100
 
 
-OptixStackSizes programGroupGetStackSize(
+pyoptix::StackSizes programGroupGetStackSize(
        pyoptix::ProgramGroup programGroup
     )
 {
-    OptixStackSizes sizes{};
+    pyoptix::StackSizes sizes;
     PYOPTIX_CHECK(
         optixProgramGroupGetStackSize(
             programGroup.programGroup,
-            &sizes
+            &sizes.ss
         )
     );
     return sizes;
@@ -1699,16 +1738,16 @@ namespace util
 
 void accumulateStackSizes(
         pyoptix::ProgramGroup programGroup,
-        OptixStackSizes&  stackSizes
+        pyoptix::StackSizes&  stackSizes
         )
 {
     PYOPTIX_CHECK(
-        optixUtilAccumulateStackSizes( programGroup.programGroup, &stackSizes )
+        optixUtilAccumulateStackSizes( programGroup.programGroup, &stackSizes.ss )
     );
 }
 
 py::tuple computeStackSizes(
-        const OptixStackSizes& stackSizes,
+        const pyoptix::StackSizes& stackSizes,
         unsigned int           maxTraceDepth,
         unsigned int           maxCCDepth,
         unsigned int           maxDCDepth
@@ -1720,7 +1759,7 @@ py::tuple computeStackSizes(
 
     PYOPTIX_CHECK(
         optixUtilComputeStackSizes(
-            &stackSizes,
+            &stackSizes.ss,
             maxTraceDepth,
             maxCCDepth,
             maxDCDepth,
@@ -1738,7 +1777,7 @@ py::tuple computeStackSizes(
 }
 
 py::tuple computeStackSizesDCSplit(
-        const OptixStackSizes& stackSizes,
+        const pyoptix::StackSizes& stackSizes,
         unsigned int           dssDCFromTraversal,
         unsigned int           dssDCFromState,
         unsigned int           maxTraceDepth,
@@ -1753,7 +1792,7 @@ py::tuple computeStackSizesDCSplit(
 
     PYOPTIX_CHECK(
         optixUtilComputeStackSizesDCSplit(
-            &stackSizes,
+            &stackSizes.ss,
             dssDCFromTraversal,
             dssDCFromState,
             maxTraceDepth,
@@ -1775,7 +1814,7 @@ py::tuple computeStackSizesDCSplit(
 
 
 py::tuple computeStackSizesCssCCTree(
-        const OptixStackSizes* stackSizes,
+        const pyoptix::StackSizes& stackSizes,
         unsigned int           cssCCTree,
         unsigned int           maxTraceDepth,
         unsigned int           maxDCDepth
@@ -1787,7 +1826,7 @@ py::tuple computeStackSizesCssCCTree(
 
     PYOPTIX_CHECK(
         optixUtilComputeStackSizesCssCCTree(
-            stackSizes,
+            &stackSizes.ss,
             cssCCTree,
             maxTraceDepth,
             maxDCDepth,
@@ -3425,25 +3464,68 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
             )
         ;
 
-    py::class_<OptixStackSizes>(m, "StackSizes")
-        .def( py::init( []()
-           { return std::unique_ptr<OptixStackSizes>(new OptixStackSizes{} ); }
-        ) )
-        .def_readwrite( "cssRG", &OptixStackSizes::cssRG )
-        .def_readwrite( "cssMS", &OptixStackSizes::cssMS )
-        .def_readwrite( "cssCH", &OptixStackSizes::cssCH )
-        .def_readwrite( "cssAH", &OptixStackSizes::cssAH )
-        .def_readwrite( "cssIS", &OptixStackSizes::cssIS )
-        .def_readwrite( "cssCC", &OptixStackSizes::cssCC )
-        .def_readwrite( "dssDC", &OptixStackSizes::dssDC )
+    py::class_<pyoptix::StackSizes>(m, "StackSizes")
+        .def(
+            py::init<
+                uint32_t,
+                uint32_t,
+                uint32_t,
+                uint32_t,
+                uint32_t,
+                uint32_t,
+                uint32_t
+                >(),
+            py::arg( "cssRG" ) = 0,
+            py::arg( "cssMS" ) = 0,
+            py::arg( "cssCH" ) = 0,
+            py::arg( "cssAH" ) = 0,
+            py::arg( "cssIS" ) = 0,
+            py::arg( "cssCC" ) = 0,
+            py::arg( "dssDC" ) = 0
+            )
+        .def_property( "cssRG",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssRG; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssRG = val;  }
+            )
+        .def_property( "cssMS",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssMS; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssMS = val;  }
+            )
+        .def_property( "cssCH",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssCH; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssCH = val;  }
+            )
+        .def_property( "cssAH",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssAH; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssAH = val;  }
+            )
+        .def_property( "cssIS",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssIS; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssIS = val;  }
+            )
+        .def_property( "cssCC",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssCC; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssCC = val;  }
+            )
+        .def_property( "cssRG",
+            [](const pyoptix::StackSizes& self)         { return self.ss.cssRG; },
+            [](pyoptix::StackSizes& self, uint32_t val) { self.ss.cssRG = val;  }
+            )
         ;
 
 #if OPTIX_VERSION >= 70100
     py::class_<pyoptix::BuiltinISOptions>(m, "BuiltinISOptions")
         .def(
-            py::init<OptixPrimitiveType, bool>(),
-            py::arg( "builtinISModuleType" ) = OPTIX_PRIMITIVE_TYPE_TRIANGLE,
-            py::arg( "usesMotionBlur" )=false
+            py::init<
+                OptixPrimitiveType, 
+                bool
+                IF_OPTIX74( COMMA uint32_t )
+                IF_OPTIX74( COMMA uint32_t )
+            >(),
+            py::arg( "builtinISModuleType"                   ) = OPTIX_PRIMITIVE_TYPE_TRIANGLE,
+            py::arg( "usesMotionBlur"                        ) = false
+            IF_OPTIX74( COMMA py::arg( "buildFlags"          ) = 0 )
+            IF_OPTIX74( COMMA py::arg( "curveEndcapFlags"    ) = 0 )
             )
         .def_property( "builtinISModuleType",
             [](const pyoptix::BuiltinISOptions& self)
@@ -3457,6 +3539,20 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
             [](pyoptix::BuiltinISOptions& self, bool val )
             { self.options.usesMotionBlur = val; }
         )
+#if OPTIX_VERSION >= 70400
+        .def_property( "buildFlags",
+            [](const pyoptix::BuiltinISOptions& self)
+            { return self.options.buildFlags; },
+            [](pyoptix::BuiltinISOptions& self, uint32_t val )
+            { self.options.buildFlags = val; }
+        )
+        .def_property( "curveEndcapFlags",
+            [](const pyoptix::BuiltinISOptions& self)
+            { return self.options.curveEndcapFlags; },
+            [](pyoptix::BuiltinISOptions& self, uint32_t val )
+            { self.options.curveEndcapFlags = val; }
+        )
+#endif // OPTIX_VERSION >= 70400
         ;
 #endif // OPTIX_VERSION >= 70100
 

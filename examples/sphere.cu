@@ -47,10 +47,6 @@ static __forceinline__ __device__ void trace(
         float3*                prd
         )
 {
-    // printf( "origin: %f %f %f\n", ray_origin.x, ray_origin.y, ray_origin.z );
-    // printf( "direct: %f %f %f\n", ray_direction.x, ray_direction.y, ray_direction.z );
-    // printf( "PRD: %f %f %f\n", prd->x, prd->y, prd->z );
-
     unsigned int p0, p1, p2;
     p0 = float_as_int( prd->x );
     p1 = float_as_int( prd->y );
@@ -99,33 +95,26 @@ extern "C" __global__ void __raygen__rg()
 
     const RayGenData* rt_data = reinterpret_cast<RayGenData*>( optixGetSbtDataPointer() );
 
-    // these values are set to 1.2, 3.4, 5.6 in sbt raygen entry but are all zeros when retrieved here. 
-    printf( "TEST: %f %f %f\n", rt_data->x, rt_data->y, rt_data->z );
+    const float3 U = rt_data->camera_u;
+    const float3 V = rt_data->camera_v;
+    const float3 W = rt_data->camera_w;
 
-    // const float3      U      = make_float3( rt_data->camera_u_x, rt_data->camera_u_y, rt_data->camera_u_z );
-    // const float3      V      = make_float3( rt_data->camera_v_x, rt_data->camera_v_y, rt_data->camera_v_z );
-    // const float3      W      = make_float3( rt_data->camera_w_x, rt_data->camera_w_y, rt_data->camera_w_z );
+    const float2      d = 2.0f * make_float2(
+            static_cast<float>( idx.x ) / static_cast<float>( dim.x ),
+            static_cast<float>( idx.y ) / static_cast<float>( dim.y )
+            ) - 1.0f;
 
-    // printf( "U %f %f %f\n", U.x, U.y, U.z );
-    // printf( "V %f %f %f\n", V.x, V.y, V.z );
-    // printf( "W %f %f %f\n", W.x, W.y, W.z );
+    const float3 origin      = rt_data->cam_eye;
+    const float3 direction   = normalize( d.x * U + d.y * V + W );
+    float3       payload_rgb = make_float3( 0.5f, 0.5f, 0.5f );
+    trace( params.handle,
+            origin,
+            direction,
+            0.00f,  // tmin
+            1e16f,  // tmax
+            &payload_rgb );
 
-    // const float2      d = 2.0f * make_float2(
-    //         static_cast<float>( idx.x ) / static_cast<float>( dim.x ),
-    //         static_cast<float>( idx.y ) / static_cast<float>( dim.y )
-    //         ) - 1.0f;
-
-    // const float3 origin      = make_float3( rt_data->cam_eye_x, rt_data->cam_eye_y, rt_data->cam_eye_z );
-    // const float3 direction   = normalize( d.x * U + d.y * V + W );
-    // float3       payload_rgb = make_float3( 0.5f, 0.5f, 0.5f );
-    // trace( params.handle,
-    //         origin,
-    //         direction,
-    //         0.00f,  // tmin
-    //         1e16f,  // tmax
-    //         &payload_rgb );
-
-    //params.image[idx.y * params.image_width + idx.x] = make_color( payload_rgb );
+    params.image[idx.y * params.image_width + idx.x] = make_color( payload_rgb );
 }
 
 

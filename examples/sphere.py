@@ -324,18 +324,26 @@ def create_sbt( prog_groups ):
     #
     # raygen record
     #
-    # actual raygen data will contain a handful of float3, just trying to get 
-    # data across similar to the miss record (since that seems to work in the triangle sample)
-    formats = [ header_format, 'f4', 'f4', 'f4' ]
+    formats = [ header_format, 'f4','f4','f4',
+                               'f4','f4','f4',
+                               'f4','f4','f4',
+                               'f4','f4','f4' ]
     itemsize = get_aligned_itemsize( formats, optix.SBT_RECORD_ALIGNMENT )
     dtype = np.dtype( {
-        'names'     : ['header', 'x','y','z'],
+        'names'     : ['header', 'eye_x','eye_y','eye_z',
+                                 'u_x', 'u_y', 'u_z',
+                                 'v_x', 'v_y', 'v_z',
+                                 'w_x', 'w_y', 'w_z'
+                                 ],
         'formats'   : formats,
         'itemsize'  : itemsize,
         'align'     : True  
         })
-    h_raygen_sbt = np.array( [ 0, 1.2, 3.4, 5.6 ], dtype = dtype )
-    # print( h_raygen_sbt[4] )
+    h_raygen_sbt = np.array( [ ( 0, 0.0, 0.0, 3.0,
+                                    2.31, -0.0, 0.0,
+                                    0.0, 1.73, 0.0,
+                                    0.0, 0.0, -3.0  
+                               ) ], dtype = dtype )
     optix.sbtRecordPackHeader( raygen_prog_group, h_raygen_sbt )
     global d_raygen_sbt
     d_raygen_sbt = array_to_device_memory( h_raygen_sbt )
@@ -432,8 +440,6 @@ def launch( pipeline, sbt, trav_handle ):
     return h_pix
 
 
-
-
 #-------------------------------------------------------------------------------
 #
 # main
@@ -445,14 +451,14 @@ def main():
     sphere_cu = os.path.join(os.path.dirname(__file__), 'sphere.cu')
     sphere_ptx = compile_cuda( sphere_cu )
 
-    ctx                 = create_ctx()
+    ctx                             = create_ctx()
     gas_handle, d_gas_output_buffer = create_accel(ctx)
-    pipeline_options = set_pipeline_options()
-    module = create_module( ctx, pipeline_options, sphere_ptx )
-    prog_groups = create_program_groups( ctx, module )
-    pipeline = create_pipeline( ctx, prog_groups, pipeline_options )
-    sbt = create_sbt( prog_groups )
-    pix = launch( pipeline, sbt, gas_handle )
+    pipeline_options                = set_pipeline_options()
+    module                          = create_module( ctx, pipeline_options, sphere_ptx )
+    prog_groups                     = create_program_groups( ctx, module )
+    pipeline                        = create_pipeline( ctx, prog_groups, pipeline_options )
+    sbt                             = create_sbt( prog_groups )
+    pix                             = launch( pipeline, sbt, gas_handle )
 
     print( "Total number of log messages: {}".format( logger.num_mssgs ) )
 

@@ -26,7 +26,13 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
-// const unsigned int NUM_ATTRIBUTE_VALUES = 4u;
+
+struct Sphere
+{
+    float center_x, center_y, center_z;
+    float radius;
+};
+
 
 struct Params
 {
@@ -41,20 +47,14 @@ struct Params
 
 struct RayGenData
 {
-    float x, y, z;
+    float3 cam_eye;
+    float3 camera_u, camera_v, camera_w;
 };
 
 
 struct MissData
 {
     float r, g, b;
-};
-
-
-struct Sphere
-{
-    float center_x, center_y, center_z;
-    float radius;
 };
 
 

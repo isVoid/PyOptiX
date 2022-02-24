@@ -1611,17 +1611,17 @@ void accelCheckRelocationCompatibility(
     );
 }
 
-void accelRelocate(
+OptixTraversableHandle accelRelocate(
        pyoptix::DeviceContext          context,
        uintptr_t           stream,
        const OptixAccelRelocationInfo* info,
        CUdeviceptr                     instanceTraversableHandles,
        size_t                          numInstanceTraversableHandles,
        CUdeviceptr                     targetAccel,
-       size_t                          targetAccelSizeInBytes,
-       OptixTraversableHandle*         targetHandle
+       size_t                          targetAccelSizeInBytes
     )
 {
+    OptixTraversableHandle targetHandle;
     PYOPTIX_CHECK(
         optixAccelRelocate(
             context.deviceContext,
@@ -1631,20 +1631,21 @@ void accelRelocate(
             numInstanceTraversableHandles,
             targetAccel,
             targetAccelSizeInBytes,
-            targetHandle
+            &targetHandle
         )
     );
+    return targetHandle;
 }
 
-void accelCompact(
+OptixTraversableHandle accelCompact(
        pyoptix::DeviceContext  context,
        uintptr_t   stream,
        OptixTraversableHandle  inputHandle,
        CUdeviceptr             outputBuffer,
-       size_t                  outputBufferSizeInBytes,
-       OptixTraversableHandle* outputHandle
+       size_t                  outputBufferSizeInBytes
     )
 {
+    OptixTraversableHandle outputHandle;
     PYOPTIX_CHECK(
         optixAccelCompact(
             context.deviceContext,
@@ -1652,26 +1653,32 @@ void accelCompact(
             inputHandle,
             outputBuffer,
             outputBufferSizeInBytes,
-            outputHandle
+            &outputHandle
         )
     );
+
+    return outputHandle;
 }
 
-void convertPointerToTraversableHandle(
+// TODO: KEITH check for return params!:1634
+// 
+
+OptixTraversableHandle convertPointerToTraversableHandle(
        pyoptix::DeviceContext  onDevice,
        CUdeviceptr             pointer,
-       OptixTraversableType    traversableType,
-       OptixTraversableHandle* traversableHandle
+       OptixTraversableType    traversableType
     )
 {
+    OptixTraversableHandle traversableHandle;
     PYOPTIX_CHECK(
         optixConvertPointerToTraversableHandle(
             onDevice.deviceContext,
             pointer,
             traversableType,
-            traversableHandle
+            &traversableHandle
         )
     );
+    return traversableHandle;
 }
 
 #if OPTIX_VERSION >= 70300

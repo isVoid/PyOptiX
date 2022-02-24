@@ -241,7 +241,7 @@ def create_module():
     module_compile_options = optix.ModuleCompileOptions(
         maxRegisterCount   = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         optLevel           = optix.COMPILE_OPTIMIZATION_DEFAULT,
-        debugLevel         = optix.COMPILE_DEBUG_LEVEL_MINIMAL
+        debugLevel         = optix.COMPILE_DEBUG_LEVEL_DEFAULT
         )
 
     intersector_options = optix.BuiltinISOptions(

@@ -134,13 +134,6 @@ def compile_cuda( cuda_file ):
 #
 #-------------------------------------------------------------------------------
 
-def init_optix():
-    print( "Initializing cuda ..." )
-    cp.cuda.runtime.free( 0 )
-
-    print( "Initializing optix ..." )
-    optix.init()
-
 
 def create_ctx():
     print( "Creating optix device context ..." )
@@ -233,7 +226,7 @@ def create_module( ctx, pipeline_options, sphere_ptx ):
     module_options = optix.ModuleCompileOptions(
         maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
-        debugLevel       = optix.COMPILE_DEBUG_LEVEL_MINIMAL
+        debugLevel       = optix.COMPILE_DEBUG_LEVEL_DEFAULT
         )
 
     module, log = ctx.moduleCreateFromPTX(

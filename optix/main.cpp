@@ -1598,7 +1598,7 @@ OptixAccelRelocationInfo accelGetRelocationInfo(
     return info;
 }
 
-py::bool accelCheckRelocationCompatibility(
+py::bool_ accelCheckRelocationCompatibility(
        pyoptix::DeviceContext context,
        const OptixAccelRelocationInfo* info
     )
@@ -1611,7 +1611,7 @@ py::bool accelCheckRelocationCompatibility(
             &compatible
         )
     );
-    return py::bool_( enabled );
+    return py::bool_( compatible );
 }
 
 OptixTraversableHandle accelRelocate(
@@ -1685,7 +1685,7 @@ OptixTraversableHandle convertPointerToTraversableHandle(
 pyoptix::Denoiser denoiserCreate( 
        pyoptix::DeviceContext context,
        OptixDenoiserModelKind modelKind,
-       const OptixDenoiserOptions* options,
+       const OptixDenoiserOptions* options
     )
 {
     pyoptix::Denoiser denoiser;

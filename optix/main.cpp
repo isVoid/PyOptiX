@@ -339,6 +339,168 @@ struct BuildInputInstanceArray
 };
 
 
+struct Instance
+{
+    Instance(
+        const py::list& transform, // 12 floats
+        uint32_t        instanceId,
+        uint32_t        sbtOffset,
+        uint32_t        visibilityMask,
+        uint32_t        flags,
+        OptixTraversableHandle traversableHandle
+    )
+    {
+        instance.instanceId        = instanceId;
+        instance.sbtOffset         = sbtOffset;
+        instance.visibilityMask    = visibilityMask;
+        instance.flags             = flags;
+        instance.traversableHandle = traversableHandle;
+        setTransform( transform );
+    }
+
+    void setTransform( const py::list& val )
+    {
+        auto transform = val.cast<std::vector<float> >();
+        if( transform.size() != 12 )
+            throw std::runtime_error( "Instance ctor: transform array must be length 12" );
+        for( int i = 0; i < transform.size(); ++i )
+            instance.transform[i] = transform[i];
+    }
+
+    OptixInstance instance{};
+};
+
+
+struct MotionOptions
+{
+    MotionOptions() {}
+    MotionOptions( const OptixMotionOptions& other ) 
+    { options = other; }
+
+    MotionOptions(
+        uint32_t numKeys,
+        uint32_t flags,
+        float    timeBegin,
+        float    timeEnd
+    )
+    {
+        options.numKeys    = numKeys;
+        options.flags      = flags;
+        options.timeBegin  = timeBegin;
+        options.timeEnd    = timeEnd;
+    }
+
+    OptixMotionOptions options{};
+};
+
+
+struct AccelEmitDesc
+{
+    AccelEmitDesc(
+        CUdeviceptr            result,
+        OptixAccelPropertyType type 
+    )
+    {
+        desc.result = result;
+        desc.type   = type;
+    }
+
+    OptixAccelEmitDesc desc{};
+};
+
+
+struct StaticTransform
+{
+    StaticTransform(
+        OptixTraversableHandle child,
+        const py::list&        transform_,
+        const py::list&        invTransform
+    )
+    {
+        transform.child = child;
+        setTransform( transform_ );
+        setInvTransform( invTransform );
+    }
+
+    void setTransform( const py::list& val )
+    {
+        auto transform_ = val.cast<std::vector<float> >();
+        if( transform_.size() != 12 )
+            throw std::runtime_error( "Instance ctor: transform array must be length 12" );
+        for( int i = 0; i < transform_.size(); ++i )
+            transform.transform[i] = transform_[i];
+    }
+
+    void setInvTransform( const py::list& val )
+    {
+        auto invTransform = val.cast<std::vector<float> >();
+        if( invTransform.size() != 12 )
+            throw std::runtime_error( "Instance ctor: invTransform array must be length 12" );
+        for( int i = 0; i < invTransform.size(); ++i )
+            transform.invTransform[i] = invTransform[i];
+    }
+    
+    
+    py::bytes getBytes()
+    {
+        const char* transform_chars = reinterpret_cast<char*>( &transform );
+        return std::string( 
+            transform_chars, 
+            transform_chars+sizeof(OptixStaticTransform)
+            );
+    }
+
+    OptixStaticTransform transform{};
+};
+
+
+struct MatrixMotionTransform
+{
+    MatrixMotionTransform(
+        OptixTraversableHandle child,
+        pyoptix::MotionOptions motionOptions,
+        const py::list&        transform
+        )
+    {
+        mtransform.child         = child;
+        mtransform.motionOptions = motionOptions.options;
+        setTransform( transform );
+    }
+
+    void setTransform( const py::list& val )
+    {
+        auto transform = val.cast<std::vector<float> >();
+        if( transform.size() <= 24 )
+            throw std::runtime_error( "Transform array must be at least length 24" );
+        if( transform.size() % 12 )
+            throw std::runtime_error( "Transform array length must be multiple of 12" );
+        memcpy( mtransform.transform, transform.data(), sizeof(float)*24 );
+        extra_transform.assign( transform.begin()+24, transform.end() );
+    }
+
+    py::bytes getBytes()
+    {
+        // TODO: optimize this
+        const char* mtransform_chars = reinterpret_cast<char*>( &mtransform );
+        const char* extra_transform_chars = reinterpret_cast<char*>( extra_transform.data() );
+
+        std::vector<char> data( 
+            mtransform_chars, 
+            mtransform_chars + sizeof( OptixMatrixMotionTransform ) 
+            );
+        data.insert( 
+            data.end(), 
+            extra_transform_chars, 
+            extra_transform_chars + sizeof(float)*extra_transform.size()
+            );
+        return std::string( data.begin(), data.end() );
+    }
+
+    OptixMatrixMotionTransform mtransform{};
+    std::vector<float>   extra_transform;
+};
+
+
 struct PipelineCompileOptions
 {
     PipelineCompileOptions(
@@ -623,7 +785,6 @@ struct ModuleCompileOptions
 };
 
 
-
 #if OPTIX_VERSION >= 70100
 struct BuiltinISOptions
 {
@@ -674,7 +835,6 @@ struct ProgramGroupDesc
     {
         program_group_desc.flags = flags;
 
-        // TODO: check for bad inputs and throw exception (eg, passing in kind = RAYGEN and a missModule)
         if( raygenEntryFunctionName )
         {
             program_group_desc.kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
@@ -762,7 +922,6 @@ struct ProgramGroupOptions
     OptixProgramGroupOptions options{};
 };
 #endif // OPTIX_VERSION >= 70400
-
 
 
 //------------------------------------------------------------------------------
@@ -1395,8 +1554,11 @@ OptixTraversableHandle accelBuild(
     std::vector<OptixBuildInput> build_inputs;
     convertBuildInputs( buildInputs, build_inputs );
 
-    const uint32_t num_properties = emittedProperties.size();
-    auto emitted_properties = emittedProperties.cast<std::vector<OptixAccelEmitDesc> >();
+    const uint32_t num_properties           = emittedProperties.size();
+    const auto     emitted_properties_temp  = emittedProperties.cast<std::vector<pyoptix::AccelEmitDesc> >();
+    std::vector<OptixAccelEmitDesc> emitted_properties;
+    for( auto desc : emitted_properties_temp )
+        emitted_properties.push_back( desc.desc );
 
     OptixTraversableHandle output_handle;
     PYOPTIX_CHECK(
@@ -1904,7 +2066,7 @@ PYBIND11_MODULE( optix, m )
 
     )pbdoc";
 
-    cudaFree(0); 
+    cudaFree(0);  // Init CUDA runtime
     pyoptix::init();
     
     //---------------------------------------------------------------------------
@@ -2780,22 +2942,103 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         ;
     */
 
-    py::class_<OptixInstance>(m, "Instance")
-        .def( py::init([]() { return std::unique_ptr<OptixInstance>(new OptixInstance{} ); } ) )
-        .def_readwrite( "instanceId", &OptixInstance::instanceId )
-        .def_readwrite( "sbtOffset", &OptixInstance::sbtOffset )
-        .def_readwrite( "visibilityMask", &OptixInstance::visibilityMask )
-        .def_readwrite( "flags", &OptixInstance::flags )
-        .def_readwrite( "traversableHandle", &OptixInstance::traversableHandle )
+
+    py::class_<pyoptix::Instance>(m, "Instance")
+        .def( 
+            py::init< 
+                const py::list&, // 12 floats
+                uint32_t,
+                uint32_t,
+                uint32_t,
+                uint32_t,
+                OptixTraversableHandle
+                >(), 
+            py::arg( "transform"         ) = 0u,
+            py::arg( "instanceId"        ) = 0u,
+            py::arg( "sbtOffset"         ) = 0u,
+            py::arg( "visibilityMask"    ) = 0u,
+            py::arg( "flags"             ) = 0u,
+            py::arg( "traversableHandle" ) = 0u
+        )
+        .def_property( "transform", 
+            []( const pyoptix::Instance& self ) 
+            { return py::cast( self.instance.transform ); }, 
+            //nullptr,
+            [](pyoptix::Instance& self, const py::list& val) 
+            { self.setTransform( val ); }
+            )
+        .def_property( "instanceId", 
+            []( const pyoptix::Instance& self ) 
+            { return self.instance.instanceId; }, 
+            [](pyoptix::Instance& self, uint32_t val) 
+            { self.instance.instanceId= val; }
+            )
+        .def_property( "sbtOffset", 
+            []( const pyoptix::Instance& self ) 
+            { return self.instance.sbtOffset; }, 
+            [](pyoptix::Instance& self, uint32_t val) 
+            { self.instance.sbtOffset = val; }
+            )
+        .def_property( "visibilityMask", 
+            []( const pyoptix::Instance& self ) 
+            { return self.instance.visibilityMask; }, 
+            [](pyoptix::Instance& self, uint32_t val) 
+            { self.instance.visibilityMask = val; }
+            )
+        .def_property( "flags", 
+            []( const pyoptix::Instance& self ) 
+            { return self.instance.flags; }, 
+            [](pyoptix::Instance& self, uint32_t val) 
+            { self.instance.flags = val; }
+            )
+        .def_property( "traversableHandle", 
+            []( const pyoptix::Instance& self ) 
+            { return self.instance.traversableHandle; }, 
+            [](pyoptix::Instance& self, OptixTraversableHandle val) 
+            { self.instance.traversableHandle = val; }
+            )
         ;
 
-    py::class_<OptixMotionOptions>(m, "MotionOptions")
-        .def( py::init([]() { return std::unique_ptr<OptixMotionOptions>(new OptixMotionOptions{} ); } ) )
-        .def_readwrite( "numKeys", &OptixMotionOptions::numKeys )
-        .def_readwrite( "flags", &OptixMotionOptions::flags )
-        .def_readwrite( "timeBegin", &OptixMotionOptions::timeBegin )
-        .def_readwrite( "timeEnd", &OptixMotionOptions::timeEnd )
+
+    py::class_<pyoptix::MotionOptions>(m, "MotionOptions")
+        .def( 
+            py::init< 
+                uint32_t,
+                uint32_t,
+                float,
+                float
+                >(), 
+            py::arg( "numKeys"   ) = 0u,
+            py::arg( "flags"     ) = 0u,
+            py::arg( "timeBegin" ) = 0.0f,
+            py::arg( "timeEnd"   ) = 0.0f
+        )
+        .def_property( "numKeys", 
+            []( const pyoptix::MotionOptions& self ) 
+            { return self.options.numKeys; }, 
+            [](pyoptix::MotionOptions& self, uint32_t val) 
+            { self.options.numKeys = val; }
+            )
+        .def_property( "flags", 
+            []( const pyoptix::MotionOptions& self ) 
+            { return self.options.flags; }, 
+            [](pyoptix::MotionOptions& self, uint32_t val) 
+            { self.options.flags = val; }
+            )
+        .def_property( "timeBegin", 
+            []( const pyoptix::MotionOptions& self ) 
+            { return self.options.timeBegin; }, 
+            [](pyoptix::MotionOptions& self, float val) 
+            { self.options.timeBegin = val; }
+            )
+        .def_property( "timeEnd", 
+            []( const pyoptix::MotionOptions& self ) 
+            { return self.options.timeEnd; }, 
+            [](pyoptix::MotionOptions& self, float val) 
+            { self.options.timeEnd = val; }
+            )
         ;
+
 
     py::class_<OptixAccelBuildOptions>(m, "AccelBuildOptions")
         .def( py::init(
@@ -2823,33 +3066,107 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
 
     py::class_<OptixAccelBufferSizes>(m, "AccelBufferSizes")
         .def( py::init([]() { return std::unique_ptr<OptixAccelBufferSizes>(new OptixAccelBufferSizes{} ); } ) )
-        .def_readwrite( "outputSizeInBytes", &OptixAccelBufferSizes::outputSizeInBytes )
-        .def_readwrite( "tempSizeInBytes", &OptixAccelBufferSizes::tempSizeInBytes )
-        .def_readwrite( "tempUpdateSizeInBytes", &OptixAccelBufferSizes::tempUpdateSizeInBytes )
+        .def_readonly( "outputSizeInBytes", &OptixAccelBufferSizes::outputSizeInBytes )
+        .def_readonly( "tempSizeInBytes", &OptixAccelBufferSizes::tempSizeInBytes )
+        .def_readonly( "tempUpdateSizeInBytes", &OptixAccelBufferSizes::tempUpdateSizeInBytes )
         ;
 
 
-    py::class_<OptixAccelEmitDesc>(m, "AccelEmitDesc")
-        .def( py::init([]() { return std::unique_ptr<OptixAccelEmitDesc>(new OptixAccelEmitDesc{} ); } ) )
-        .def_readwrite( "result", &OptixAccelEmitDesc::result )
-        .def_readwrite( "type", &OptixAccelEmitDesc::type )
+    py::class_<pyoptix::AccelEmitDesc>(m, "AccelEmitDesc")
+        .def( 
+            py::init< 
+                CUdeviceptr,
+                OptixAccelPropertyType 
+                >(), 
+            py::arg( "result" ) = 0u,
+            py::arg( "type"   ) = 0u
+        )
+        .def_property( "result",
+            []( const pyoptix::AccelEmitDesc& self )
+            { return self.desc.result; },
+            [](pyoptix::AccelEmitDesc& self, CUdeviceptr val)
+            { self.desc.result = val; }
+            )
+        .def_property( "type", 
+            []( const pyoptix::AccelEmitDesc& self ) 
+            { return self.desc.type; }, 
+            [](pyoptix::AccelEmitDesc& self, OptixAccelPropertyType val) 
+            { self.desc.type = val; }
+            )
         ;
 
     py::class_<OptixAccelRelocationInfo>(m, "AccelRelocationInfo")
         .def( py::init([]() { return std::unique_ptr<OptixAccelRelocationInfo>(new OptixAccelRelocationInfo{} ); } ) )
+        // NB: info field is internal only so not making accessible
         ;
 
-    py::class_<OptixStaticTransform>(m, "StaticTransform")
-        .def( py::init([]() { return std::unique_ptr<OptixStaticTransform>(new OptixStaticTransform{} ); } ) )
-        .def_readwrite( "child", &OptixStaticTransform::child )
+    py::class_<pyoptix::StaticTransform>(m, "StaticTransform")
+        .def( 
+            py::init< 
+                OptixTraversableHandle,
+                const py::list&, // 12 floats
+                const py::list& // 12 floats
+                >(), 
+            py::arg( "child"        ) = 0u,
+            py::arg( "transform"    ) = 0u,
+            py::arg( "invTransform" ) = 0u
+        )
+        .def_property( "child", 
+            []( const pyoptix::StaticTransform& self ) 
+            { return self.transform.child; }, 
+            [](pyoptix::StaticTransform& self, OptixTraversableHandle val) 
+            { self.transform.child= val; }
+            )
+        .def_property( "transform", 
+            []( const pyoptix::StaticTransform& self ) 
+            { return py::cast( self.transform.transform ); }, 
+            //nullptr,
+            [](pyoptix::StaticTransform& self, const py::list& val) 
+            { self.setTransform( val ); }
+            )
+        .def_property( "invTransform", 
+            []( const pyoptix::StaticTransform& self ) 
+            { return py::cast( self.transform.invTransform ); }, 
+            //nullptr,
+            [](pyoptix::StaticTransform& self, const py::list& val) 
+            { self.setInvTransform( val ); }
+            )
+        .def( "getBytes", &pyoptix::StaticTransform::getBytes )
         ;
 
-    py::class_<OptixMatrixMotionTransform>(m, "MatrixMotionTransform")
-        .def( py::init([]() { return std::unique_ptr<OptixMatrixMotionTransform>(new OptixMatrixMotionTransform{} ); } ) )
-        .def_readwrite( "child", &OptixMatrixMotionTransform::child )
-        .def_readwrite( "motionOptions", &OptixMatrixMotionTransform::motionOptions )
+
+    py::class_<pyoptix::MatrixMotionTransform>(m, "MatrixMotionTransform")
+        .def( 
+            py::init< 
+                OptixTraversableHandle,
+                pyoptix::MotionOptions, 
+                const py::list& // N*12 floats where N >= 2
+                >(), 
+            py::arg( "child"         ) = 0u,
+            py::arg( "motionOptions" ) = pyoptix::MotionOptions{},
+            py::arg( "transform"     ) = 0u
+        )
+        .def_property( "child", 
+            []( const pyoptix::MatrixMotionTransform& self ) 
+            { return self.mtransform.child; }, 
+            [](pyoptix::MatrixMotionTransform& self, OptixTraversableHandle val) 
+            { self.mtransform.child= val; }
+            )
+        .def_property( "motionOptions", 
+            []( const pyoptix::MatrixMotionTransform& self ) 
+            { return pyoptix::MotionOptions( self.mtransform.motionOptions ); }, 
+            [](pyoptix::MatrixMotionTransform& self, const pyoptix::MotionOptions& val) 
+            { self.mtransform.motionOptions = val.options; }
+            )
+        .def_property( "transform", 
+            nullptr,
+            [](pyoptix::MatrixMotionTransform& self, const py::list& val) 
+            { self.setTransform( val ); }
+            )
+        .def( "getBytes", &pyoptix::MatrixMotionTransform::getBytes )
         ;
 
+//KEITH
     py::class_<OptixSRTData>(m, "SRTData")
         .def( py::init([]() { return std::unique_ptr<OptixSRTData>(new OptixSRTData{} ); } ) )
         .def_readwrite( "tz", &OptixSRTData::tz )

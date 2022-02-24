@@ -1581,34 +1581,37 @@ OptixTraversableHandle accelBuild(
     return output_handle;
 }
 
-void accelGetRelocationInfo(
+OptixAccelRelocationInfo accelGetRelocationInfo(
        pyoptix::DeviceContext context,
-       OptixTraversableHandle handle,
-       OptixAccelRelocationInfo* info
+       OptixTraversableHandle handle
     )
 {
+    OptixAccelRelocationInfo info;
     PYOPTIX_CHECK(
         optixAccelGetRelocationInfo(
             context.deviceContext,
             handle,
-            info
+            &info
         )
     );
+
+    return info;
 }
 
-void accelCheckRelocationCompatibility(
+py::bool accelCheckRelocationCompatibility(
        pyoptix::DeviceContext context,
-       const OptixAccelRelocationInfo* info,
-       int* compatible
+       const OptixAccelRelocationInfo* info
     )
 {
+    int compatible;
     PYOPTIX_CHECK(
         optixAccelCheckRelocationCompatibility(
             context.deviceContext,
             info,
-            compatible
+            &compatible
         )
     );
+    return py::bool_( enabled );
 }
 
 OptixTraversableHandle accelRelocate(
@@ -1660,9 +1663,6 @@ OptixTraversableHandle accelCompact(
     return outputHandle;
 }
 
-// TODO: KEITH check for return params!:1634
-// 
-
 OptixTraversableHandle convertPointerToTraversableHandle(
        pyoptix::DeviceContext  onDevice,
        CUdeviceptr             pointer,
@@ -1682,36 +1682,38 @@ OptixTraversableHandle convertPointerToTraversableHandle(
 }
 
 #if OPTIX_VERSION >= 70300
-void denoiserCreate( 
+pyoptix::Denoiser denoiserCreate( 
        pyoptix::DeviceContext context,
        OptixDenoiserModelKind modelKind,
        const OptixDenoiserOptions* options,
-       pyoptix::Denoiser* denoiser
     )
 {
+    pyoptix::Denoiser denoiser;
     PYOPTIX_CHECK(
         optixDenoiserCreate(
             context.deviceContext,
             modelKind,
             options,
-            &denoiser->denoiser
+            &denoiser.denoiser
         )
     );
+    return denoiser;
 }
 #else
-void denoiserCreate(
+pyoptix::Denoiser denoiserCreate( 
        pyoptix::DeviceContext context,
-       const OptixDenoiserOptions* options,
-       pyoptix::Denoiser* denoiser
+       const OptixDenoiserOptions* options
     )
 {
+    pyoptix::Denoiser denoiser;
     PYOPTIX_CHECK( 
         optixDenoiserCreate(
             context.deviceContext,
             options,
-            &denoiser->denoiser
+            &denoiser.denoiser
         )
     );
+    return denoiser;
 }
 #endif
 
@@ -1747,21 +1749,22 @@ void denoiserDestroy(
     );
 }
 
-void denoiserComputeMemoryResources(
+OptixDenoiserSizes denoiserComputeMemoryResources(
        const pyoptix::Denoiser denoiser,
        unsigned int        outputWidth,
-       unsigned int        outputHeight,
-       OptixDenoiserSizes* returnSizes
+       unsigned int        outputHeight
     )
 {
+    OptixDenoiserSizes returnSizes;
     PYOPTIX_CHECK(
         optixDenoiserComputeMemoryResources(
             denoiser.denoiser,
             outputWidth,
             outputHeight,
-            returnSizes
+            &returnSizes
         )
     );
+    return returnSizes;
 }
 
 void denoiserSetup(

@@ -464,13 +464,14 @@ struct MatrixMotionTransform
     {
         mtransform.child         = child;
         mtransform.motionOptions = motionOptions.options;
-        setTransform( transform );
+        if( transform.size() )
+            setTransform( transform );
     }
 
     void setTransform( const py::list& val )
     {
         auto transform = val.cast<std::vector<float> >();
-        if( transform.size() <= 24 )
+        if( transform.size() < 24 )
             throw std::runtime_error( "Transform array must be at least length 24" );
         if( transform.size() % 12 )
             throw std::runtime_error( "Transform array length must be multiple of 12" );
@@ -2838,10 +2839,10 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
                 unsigned int,
                 unsigned int
                 >(), 
-            py::arg( "aabbBuffers"                 ) = 0u,
+            py::arg( "aabbBuffers"                 ) = py::list(),
             py::arg( "numPrimitives"               ) = 0u,
             py::arg( "strideInBytes"               ) = 0u,
-            py::arg( "flags"                       ) = 0u,
+            py::arg( "flags"                       ) = py::list(),
             py::arg( "numSbtRecords"               ) = 0u,
             py::arg( "sbtIndexOffsetBuffer"        ) = 0u,
             py::arg( "sbtIndexOffsetSizeInBytes"   ) = 0u,
@@ -2963,7 +2964,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
                 uint32_t,
                 OptixTraversableHandle
                 >(), 
-            py::arg( "transform"         ) = 0u,
+            py::arg( "transform"         ) = py::list(),
             py::arg( "instanceId"        ) = 0u,
             py::arg( "sbtOffset"         ) = 0u,
             py::arg( "visibilityMask"    ) = 0u,
@@ -3118,8 +3119,8 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
                 const py::list& // 12 floats
                 >(), 
             py::arg( "child"        ) = 0u,
-            py::arg( "transform"    ) = 0u,
-            py::arg( "invTransform" ) = 0u
+            py::arg( "transform"    ) = py::list(),
+            py::arg( "invTransform" ) = py::list()
         )
         .def_property( "child", 
             []( const pyoptix::StaticTransform& self ) 
@@ -3154,7 +3155,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
                 >(), 
             py::arg( "child"         ) = 0u,
             py::arg( "motionOptions" ) = pyoptix::MotionOptions{},
-            py::arg( "transform"     ) = 0u
+            py::arg( "transform"     ) = py::list() 
         )
         .def_property( "child", 
             []( const pyoptix::MatrixMotionTransform& self ) 

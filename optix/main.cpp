@@ -3054,19 +3054,19 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .def( py::init(
                 []( unsigned int buildFlags,
                     OptixBuildOperation operation,
-                    const OptixMotionOptions& motionOptions
+                    const pyoptix::MotionOptions& motionOptions
                     )
                 {
                     auto opts = std::unique_ptr<OptixAccelBuildOptions>(new OptixAccelBuildOptions{} );
                     opts->buildFlags = buildFlags;
                     opts->operation = operation;
-                    opts->motionOptions = motionOptions;
+                    opts->motionOptions = motionOptions.options;
                     return opts;
                 }
             ),
             py::arg( "buildFlags"    ) = 0,
             py::arg( "operation"     ) = OPTIX_BUILD_OPERATION_BUILD,
-            py::arg( "motionOptions" ) = OptixMotionOptions{}
+            py::arg( "motionOptions" ) = pyoptix::MotionOptions()
         )
         .def_readwrite( "buildFlags", &OptixAccelBuildOptions::buildFlags )
         .def_readwrite( "operation", &OptixAccelBuildOptions::operation )

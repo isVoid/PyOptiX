@@ -441,9 +441,9 @@ struct StaticTransform
     }
     
     
-    py::bytes getBytes()
+    py::bytes getBytes() const
     {
-        const char* transform_chars = reinterpret_cast<char*>( &transform );
+        const char* transform_chars = reinterpret_cast<const char*>( &transform );
         return std::string( 
             transform_chars, 
             transform_chars+sizeof(OptixStaticTransform)
@@ -458,12 +458,12 @@ struct MatrixMotionTransform
 {
     MatrixMotionTransform(
         OptixTraversableHandle child,
-        pyoptix::MotionOptions motionOptions,
+        OptixMotionOptions motionOptions,
         const py::list&        transform
         )
     {
         mtransform.child         = child;
-        mtransform.motionOptions = motionOptions.options;
+        mtransform.motionOptions = motionOptions;
         if( transform.size() )
             setTransform( transform );
     }
@@ -479,11 +479,11 @@ struct MatrixMotionTransform
         extra_transform.assign( transform.begin()+24, transform.end() );
     }
 
-    py::bytes getBytes()
+    py::bytes getBytes() const
     {
         // TODO: optimize this
-        const char* mtransform_chars = reinterpret_cast<char*>( &mtransform );
-        const char* extra_transform_chars = reinterpret_cast<char*>( extra_transform.data() );
+        const char* mtransform_chars = reinterpret_cast<const char*>( &mtransform );
+        const char* extra_transform_chars = reinterpret_cast<const char*>( extra_transform.data() );
 
         std::vector<char> data( 
             mtransform_chars, 
@@ -994,6 +994,16 @@ void convertBuildInputs(
         ++idx;
     }
 }
+
+template <typename T>
+py::bytes makeBytes( const std::vector<T>& v )
+{
+
+    const char* c = reinterpret_cast<const char*>( v.data() );
+    const size_t c_size = v.size()*sizeof(T);
+    return py::bytes( c, c_size );
+}
+
 
 //------------------------------------------------------------------------------
 //
@@ -1905,6 +1915,12 @@ void denoiserComputeAverageColor(
 }
 #endif
 
+
+//------------------------------------------------------------------------------
+//
+// optix util wrappers
+//
+//------------------------------------------------------------------------------
 namespace util
 {
 
@@ -2061,6 +2077,60 @@ py::tuple computeStackSizesSimplePathTracer(
 
 
 } // end namespace util
+
+
+//------------------------------------------------------------------------------
+//
+// optix API additions for python bindings 
+//
+//------------------------------------------------------------------------------
+
+py::bytes getDeviceRepresentation( py::object obj )
+{
+    if( py::isinstance<pyoptix::MatrixMotionTransform>( obj ) )
+    {
+        const pyoptix::MatrixMotionTransform& xform = obj.cast<pyoptix::MatrixMotionTransform>();
+        return xform.getBytes(); 
+    }
+    /*
+    else if( py::isinstance<pyoptix::SRTMotionTransform>( obj ) )
+    {
+    }
+    */
+    else if( py::isinstance<pyoptix::StaticTransform>( obj ) )
+    {
+    }
+    else if( py::isinstance<py::list>( obj ) )
+    {
+        const py::list& obj_list = obj.cast<py::list>();
+        if( obj_list.size() == 0 )
+            throw std::runtime_error( "Invalid input: Empty list" );
+
+        auto first_elem = obj_list[0];
+        if( py::isinstance<pyoptix::Instance>( first_elem ) )
+        {
+            std::vector<OptixInstance> instances;
+            instances.reserve( obj_list.size() );
+            for( auto list_elem : obj_list )
+            {
+                if( !py::isinstance<pyoptix::Instance>( list_elem ) )
+                    throw std::runtime_error( "Input list contains mixed object types" );
+
+                auto instance = list_elem.cast<pyoptix::Instance>();
+                instances.push_back( instance.instance );
+            }
+            return makeBytes( instances );
+        }
+        else
+        {
+            throw std::runtime_error( "Input list contains unsupported object type" );
+        }
+    }
+    return py::bytes( "" );
+
+}
+
+
 } // end namespace pyoptix
 
 
@@ -2092,6 +2162,7 @@ PYBIND11_MODULE( optix, m )
     m.def( "launch", &pyoptix::launch );
     m.def( "sbtRecordPackHeader", &pyoptix::sbtRecordPackHeader );
     m.def( "convertPointerToTraversableHandle", &pyoptix::convertPointerToTraversableHandle );
+    m.def( "getDeviceRepresentation", &pyoptix::getDeviceRepresentation );
 
 
     //--------------------------------------------------------------------------
@@ -3011,6 +3082,7 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         ;
 
 
+    /*
     py::class_<pyoptix::MotionOptions>(m, "MotionOptions")
         .def( 
             py::init< 
@@ -3049,25 +3121,54 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
             { self.options.timeEnd = val; }
             )
         ;
+        */
 
+    py::class_<OptixMotionOptions>(m, "MotionOptions")
+        .def( py::init(
+                []( uint32_t numKeys,
+                    uint32_t flags,
+                    float timeBegin,
+                    float timeEnd 
+                    )
+                {
+                    auto opts = std::unique_ptr<OptixMotionOptions>(new OptixMotionOptions{} );
+                    opts->numKeys   = numKeys;
+                    opts->flags     = flags;
+                    opts->timeBegin = timeBegin;
+                    opts->timeEnd   = timeEnd;
+                    return opts;
+                }
+
+            ),
+            py::arg( "numKeys"   ) = 0u,
+            py::arg( "flags"     ) = 0u,
+            py::arg( "timeBegin" ) = 0.0f,
+            py::arg( "timeEnd"   ) = 0.0f
+        )
+        .def_readwrite( "numKeys", &OptixMotionOptions::numKeys )
+        .def_readwrite( "flags", &OptixMotionOptions::flags )
+        .def_readwrite( "timeBegin", &OptixMotionOptions::timeBegin )
+        .def_readwrite( "timeEnd", &OptixMotionOptions::timeEnd )
+        ;
 
     py::class_<OptixAccelBuildOptions>(m, "AccelBuildOptions")
         .def( py::init(
                 []( unsigned int buildFlags,
                     OptixBuildOperation operation,
-                    const pyoptix::MotionOptions& motionOptions
+                    const OptixMotionOptions& motionOptions
                     )
                 {
                     auto opts = std::unique_ptr<OptixAccelBuildOptions>(new OptixAccelBuildOptions{} );
                     opts->buildFlags = buildFlags;
                     opts->operation = operation;
-                    opts->motionOptions = motionOptions.options;
+                    opts->motionOptions = motionOptions;
                     return opts;
                 }
             ),
             py::arg( "buildFlags"    ) = 0,
             py::arg( "operation"     ) = OPTIX_BUILD_OPERATION_BUILD,
-            py::arg( "motionOptions" ) = pyoptix::MotionOptions()
+            //py::arg( "motionOptions" ) = pyoptix::MotionOptions()
+            py::arg( "motionOptions" ) = OptixMotionOptions{}
         )
         .def_readwrite( "buildFlags", &OptixAccelBuildOptions::buildFlags )
         .def_readwrite( "operation", &OptixAccelBuildOptions::operation )
@@ -3150,11 +3251,12 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         .def( 
             py::init< 
                 OptixTraversableHandle,
-                pyoptix::MotionOptions, 
+                //pyoptix::MotionOptions, 
+                OptixMotionOptions, 
                 const py::list& // N*12 floats where N >= 2
                 >(), 
             py::arg( "child"         ) = 0u,
-            py::arg( "motionOptions" ) = pyoptix::MotionOptions{},
+            py::arg( "motionOptions" ) = OptixMotionOptions{},
             py::arg( "transform"     ) = py::list() 
         )
         .def_property( "child", 
@@ -3165,9 +3267,9 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
             )
         .def_property( "motionOptions", 
             []( const pyoptix::MatrixMotionTransform& self ) 
-            { return pyoptix::MotionOptions( self.mtransform.motionOptions ); }, 
-            [](pyoptix::MatrixMotionTransform& self, const pyoptix::MotionOptions& val) 
-            { self.mtransform.motionOptions = val.options; }
+            { return OptixMotionOptions( self.mtransform.motionOptions ); }, 
+            [](pyoptix::MatrixMotionTransform& self, const OptixMotionOptions& val) 
+            { self.mtransform.motionOptions = val; }
             )
         .def_property( "transform", 
             nullptr,

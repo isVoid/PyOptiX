@@ -160,7 +160,7 @@ def create_ctx():
     return optix.deviceContextCreate( cu_ctx, ctx_options )
 
 
-def create_GAS(ctx):
+def build_triangle_gas( ctx ):
 
     NUM_KEYS = 3
 
@@ -241,7 +241,7 @@ def create_GAS(ctx):
         return gas_handle, d_output_buffer
 
 
-def create_sphere_GAS(ctx):
+def build_sphere_gas(ctx):
 
     accel_options = optix.AccelBuildOptions(
         buildFlags = int( optix.BUILD_FLAG_ALLOW_COMPACTION ),
@@ -317,8 +317,9 @@ def create_sphere_GAS(ctx):
                                 motion_keys
                                 )
 
-    xform_bytes = list( motion_transform.getBytes() )
-    d_sphere_motion_transform = cp.array( xform_bytes, dtype='B' )
+    xform_bytes = optix.getDeviceRepresentation( motion_transform )
+    #xform_bytes = motion_transform.getBytes()
+    d_sphere_motion_transform = cp.array( np.frombuffer( xform_bytes, dtype='B' ) )
 
     sphere_motion_transform_handle = optix.convertPointerToTraversableHandle(
                                     ctx,
@@ -326,10 +327,10 @@ def create_sphere_GAS(ctx):
                                     optix.TRAVERSABLE_TYPE_MATRIX_MOTION_TRANSFORM
                                     )
 
-    return final_gas_handle, sphere_motion_transform_handle, d_final_output_buffer
+    return sphere_motion_transform_handle, d_final_output_buffer
 
 
-def create_IAS(ctx, sphere_handle, triangle_handle):
+def build_ias(ctx, sphere_handle, triangle_handle):
 
     instance_data = [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0 ]
 
@@ -346,8 +347,40 @@ def create_IAS(ctx, sphere_handle, triangle_handle):
     triangle_instance.sbtOffset         = 1
     triangle_instance.visibilityMask    = 1
     triangle_instance.traversableHandle = triangle_handle
+    instances = [ sphere_instance, triangle_instance ]
+    instances_bytes = optix.getDeviceRepresentation( instances ) 
+
+    d_instances = cp.array( np.frombuffer( instances_bytes, dtype='B' ) )
 
     instance_input = optix.BuildInputInstanceArray()
+    instance_input.instances    = d_instances.data.ptr
+    instance_input.numInstances = len(instances) 
+
+    accel_options = optix.AccelBuildOptions() 
+    accel_options.buildFlags              = optix.BUILD_FLAG_NONE
+    accel_options.operation               = optix.BUILD_OPERATION_BUILD
+
+    accel_options.motionOptions.numKeys   = 2
+    accel_options.motionOptions.timeBegin = 0.0
+    accel_options.motionOptions.timeEnd   = 1.0
+    accel_options.motionOptions.flags     = optix.MOTION_FLAG_NONE
+
+    ias_buffer_sizes = ctx.accelComputeMemoryUsage( [accel_options], [instance_input] )
+    d_temp_buffer  = cp.cuda.alloc( ias_buffer_sizes.tempSizeInBytes ) 
+    d_ias_output_buffer = cp.cuda.alloc( ias_buffer_sizes.outputSizeInBytes)
+
+    ias_handle = ctx.accelBuild(
+        0,    # CUDA stream
+        [ accel_options ], 
+        [ instance_input ],   
+        d_temp_buffer.ptr,
+        ias_buffer_sizes.tempSizeInBytes,
+        d_ias_output_buffer.ptr,
+        ias_buffer_sizes.outputSizeInBytes,
+        [] # emitted properties
+        )
+
+
 
     # TODO
 
@@ -469,16 +502,13 @@ def main():
 
 
 
-    ctx                             = create_ctx()
-    gas_handle, d_gas_output_buffer = create_GAS(ctx)
-
-    sphere_gas_handle, sphere_motion_transform_handle, \
-        d_sphere_gas_output_buffer = create_sphere_GAS(ctx)
-
-    ias_handle, d_ias_output_buffer = create_IAS(ctx, sphere_motion_transform_handle, gas_handle)
-    module                          = create_module(ctx)
-    program_groups                  = create_program_groups(ctx, module)
-    pipeline                        = create_pipeline(ctx, program_groups)
+    ctx             = create_ctx()
+    tri_handle,    d_tri_gas_buffer    = build_triangle_gas(ctx)
+    sphere_handle, d_sphere_gas_buffer = build_sphere_gas(ctx)
+    ias_handle,    d_ias_buffer        = build_ias(ctx, sphere_handle, tri_handle)
+    module          = create_module(ctx)
+    program_groups  = create_program_groups(ctx, module)
+    pipeline        = create_pipeline(ctx, program_groups)
 
     # TODO
     # sbt              = create_sbt( prog_groups ) 

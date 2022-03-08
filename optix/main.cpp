@@ -502,6 +502,48 @@ struct MatrixMotionTransform
 };
 
 
+struct SRTData
+{
+    SRTData(
+        float sx,
+        float a,
+        float b,
+        float pvx,
+        float sy,
+        float c,
+        float pvy,
+        float sz,
+        float pvz,
+        float qx,
+        float qy,
+        float qz,
+        float qw,
+        float tx,
+        float ty,
+        float tz
+        )
+    {
+        data.sx  = sx;
+        data.a   = a;
+        data.b   = b;
+        data.pvx = pvx;
+        data.sy  = sy;
+        data.c   = c;
+        data.pvy = pvy;
+        data.sz  = sz;
+        data.pvz = pvz;
+        data.qx  = qx;
+        data.qy  = qy;
+        data.qz  = qz;
+        data.qw  = qw;
+        data.tx  = tx;
+        data.ty  = ty;
+        data.tz  = tz;
+    }
+
+    OptixSRTData data{};
+};
+
 struct PipelineCompileOptions
 {
     PipelineCompileOptions(
@@ -1220,6 +1262,7 @@ py::tuple deviceContextGetCacheDatabaseSizes(
 }
 
 
+// TODO: return log like other funcs
 pyoptix::Pipeline pipelineCreate(
        pyoptix::DeviceContext                 context,
        const pyoptix::PipelineCompileOptions& pipelineCompileOptions,
@@ -1453,11 +1496,18 @@ py::tuple programGroupCreate(
         )
     );
 
-    py::list pygroups;
-    for( auto& group : program_groups )
-        pygroups.append( pyoptix::ProgramGroup{ group } );
+    if( program_groups.size() > 1 )
+    {
+        py::list pygroups;
+        for( auto& group : program_groups )
+            pygroups.append( pyoptix::ProgramGroup{ group } );
 
-    return py::make_tuple( pygroups, py::str(log_buf) );
+        return py::make_tuple( pygroups, py::str(log_buf) );
+    }
+    else
+    {
+        return py::make_tuple( pyoptix::ProgramGroup{ program_groups.front()}, py::str(log_buf) );
+    }
 }
 
 void programGroupDestroy(
@@ -1510,6 +1560,20 @@ void sbtRecordPackHeader(
             binfo.ptr
         )
     );
+}
+
+py::bytes sbtRecordGetHeader(
+       pyoptix::ProgramGroup programGroup
+    )
+{
+    std::vector<char> bytes( OPTIX_SBT_RECORD_HEADER_SIZE, 0 );
+    PYOPTIX_CHECK(
+        optixSbtRecordPackHeader(
+            programGroup.programGroup,
+            bytes.data() 
+        )
+    );
+    return makeBytes( bytes );
 }
 
 OptixAccelBufferSizes accelComputeMemoryUsage(
@@ -2161,6 +2225,7 @@ PYBIND11_MODULE( optix, m )
     m.def( "getErrorString", &pyoptix::getErrorString );
     m.def( "launch", &pyoptix::launch );
     m.def( "sbtRecordPackHeader", &pyoptix::sbtRecordPackHeader );
+    m.def( "sbtRecordGetHeader", &pyoptix::sbtRecordGetHeader );
     m.def( "convertPointerToTraversableHandle", &pyoptix::convertPointerToTraversableHandle );
     m.def( "getDeviceRepresentation", &pyoptix::getDeviceRepresentation );
 
@@ -3081,48 +3146,6 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
             )
         ;
 
-
-    /*
-    py::class_<pyoptix::MotionOptions>(m, "MotionOptions")
-        .def( 
-            py::init< 
-                uint32_t,
-                uint32_t,
-                float,
-                float
-                >(), 
-            py::arg( "numKeys"   ) = 0u,
-            py::arg( "flags"     ) = 0u,
-            py::arg( "timeBegin" ) = 0.0f,
-            py::arg( "timeEnd"   ) = 0.0f
-        )
-        .def_property( "numKeys", 
-            []( const pyoptix::MotionOptions& self ) 
-            { return self.options.numKeys; }, 
-            [](pyoptix::MotionOptions& self, uint32_t val) 
-            { self.options.numKeys = val; }
-            )
-        .def_property( "flags", 
-            []( const pyoptix::MotionOptions& self ) 
-            { return self.options.flags; }, 
-            [](pyoptix::MotionOptions& self, uint32_t val) 
-            { self.options.flags = val; }
-            )
-        .def_property( "timeBegin", 
-            []( const pyoptix::MotionOptions& self ) 
-            { return self.options.timeBegin; }, 
-            [](pyoptix::MotionOptions& self, float val) 
-            { self.options.timeBegin = val; }
-            )
-        .def_property( "timeEnd", 
-            []( const pyoptix::MotionOptions& self ) 
-            { return self.options.timeEnd; }, 
-            [](pyoptix::MotionOptions& self, float val) 
-            { self.options.timeEnd = val; }
-            )
-        ;
-        */
-
     py::class_<OptixMotionOptions>(m, "MotionOptions")
         .def( py::init(
                 []( uint32_t numKeys,
@@ -3167,7 +3190,6 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
             ),
             py::arg( "buildFlags"    ) = 0,
             py::arg( "operation"     ) = OPTIX_BUILD_OPERATION_BUILD,
-            //py::arg( "motionOptions" ) = pyoptix::MotionOptions()
             py::arg( "motionOptions" ) = OptixMotionOptions{}
         )
         .def_readwrite( "buildFlags", &OptixAccelBuildOptions::buildFlags )

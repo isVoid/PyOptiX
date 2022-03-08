@@ -29,7 +29,6 @@
 #
 
 
-from venv import create
 import optix
 import os
 import cupy  as cp    # CUDA bindings
@@ -41,6 +40,41 @@ from PIL import Image, ImageOps # Image IO
 from pynvrtc.compiler import Program
 
 import path_util
+
+
+
+class State:
+    def __init__( self ):
+        self.context                        = None
+
+        self.tri_gas_handle                 = 0 
+        self.d_tri_gas_output_buffer        = 0 # Triangle AS memory
+
+        self.sphere_gas_handle              = 0 # Traversable handle for sphere
+        self.d_sphere_gas_output_buffer     = 0 # Sphere AS memory
+        self.sphere_motion_transform_handle = 0
+        self.d_sphere_motion_transform      = 0
+
+        self.ias_handle                     = 0 # Traversable handle for instance AS
+        self.d_ias_output_buffer            = 0 # Instance AS memory
+
+        self.ptx_module                     = None 
+        self.pipeline_compile_options       = None
+        self.pipeline                       = None 
+
+        self.raygen_prog_group              = None
+        self.miss_group                     = None
+        self.tri_hit_group                  = None
+        self.sphere_hit_group               = None
+
+        self.stream                         = stream=cp.cuda.Stream()
+        self.params                         = None
+        self.d_params                       = 0
+
+        self.sbt                            = None
+        self.d_raygen_record                = 0                 
+        self.d_miss_records                 = 0                 
+        self.d_hitgroup_records             = 0                 
 
 
 #-------------------------------------------------------------------------------
@@ -75,7 +109,7 @@ def  get_aligned_itemsize( formats, alignment ):
     temp_dtype = np.dtype( { 
         'names'   : names,
         'formats' : formats, 
-        'align'   : True
+        'aligned'   : True
         } )
     return round_up( temp_dtype.itemsize, alignment )
 
@@ -114,7 +148,6 @@ def compile_cuda( cuda_file ):
         '-std=c++11',
         '-rdc',
         'true',
-        #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
         f'-I{path_util.cuda_tk_path}',
         f'-I{path_util.include_path}'
     ]
@@ -135,8 +168,11 @@ def compile_cuda( cuda_file ):
 #
 #-------------------------------------------------------------------------------
 
+pix_width = 768
+pix_height = 768
 
-def create_ctx():
+
+def create_context( state ):
     print( "Creating optix device context ..." )
 
     # Note that log callback data is no longer needed.  We can
@@ -153,14 +189,14 @@ def create_ctx():
             )
 
     # They can also be set and queried as properties on the struct
-    if optix.version()[1] >= 2:
+    if optix_version_gte( (7,2) ):
         ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
 
     cu_ctx = 0 
-    return optix.deviceContextCreate( cu_ctx, ctx_options )
+    state.context = optix.deviceContextCreate( cu_ctx, ctx_options )
 
 
-def build_triangle_gas( ctx ):
+def build_triangle_gas( state ):
 
     NUM_KEYS = 3
 
@@ -171,13 +207,15 @@ def build_triangle_gas( ctx ):
     motion_options.flags     = optix.MOTION_FLAG_NONE
 
     accel_options = optix.AccelBuildOptions(
-        buildFlags = int( optix.BUILD_FLAG_ALLOW_RANDOM_VERTEX_ACCESS | optix.BUILD_FLAG_ALLOW_COMPACTION ),
+        buildFlags = optix.BUILD_FLAG_ALLOW_COMPACTION,
         operation  = optix.BUILD_OPERATION_BUILD,
         motionOptions = motion_options
         )    
 
+    #
+    # Copy triangle mesh data to device 
+    #
     NUM_VERTS = 3
-    global vertices
     vertices_0 = cp.array( [ 
         0.0, 0.0, 0.0, 0.0,
         1.0, 0.0, 0.0, 0.0,
@@ -185,121 +223,139 @@ def build_triangle_gas( ctx ):
         ], dtype = 'f4' )
 
     vertices_1 = cp.array( [
-        0.5, 0.0, 0.0, 0.0,
-        1.5, 0.0, 0.0, 0.0,
-        1.0, 1.0, 0.0, 0.0,
-        ], dtype = 'f4' )
-
+            0.5, 0.0, 0.0, 0.0,
+            1.5, 0.0, 0.0, 0.0,
+            1.0, 1.0, 0.0, 0.0,
+        ], 
+        dtype = 'f4' 
+    )
     vertices_2 = cp.array( [
-        0.5, -0.5, 0.0, 0.0,
-        1.5, -0.5, 0.0, 0.0,
-        1.0, 0.5, 0.0, 0.0
-        ], dtype = 'f4' )
+            0.5, -0.5, 0.0, 0.0,
+            1.5, -0.5, 0.0, 0.0,
+            1.0,  0.5, 0.0, 0.0
+        ], 
+        dtype = 'f4' 
+    )
 
-    triangle_input_flags            = [ optix.GEOMETRY_FLAG_DISABLE_ANYHIT ]
-    triangle_input                  = optix.BuildInputTriangleArray()
-    triangle_input.vertexFormat     = optix.VERTEX_FORMAT_FLOAT3
-    triangle_input.numVertices      = NUM_VERTS
-    triangle_input.vertexBuffers    = [ vertices_0.data.ptr, vertices_1.data.ptr, vertices_2.data.ptr ]
-    triangle_input.flags            = triangle_input_flags
-    triangle_input.numSbtRecords    = 1
 
-    gas_buffer_sizes = ctx.accelComputeMemoryUsage( [accel_options], [triangle_input ] )
-    d_temp_buffer    = cp.cuda.alloc( gas_buffer_sizes.tempSizeInBytes )
+    triangle_input                      = optix.BuildInputTriangleArray()
+    triangle_input.vertexFormat         = optix.VERTEX_FORMAT_FLOAT3
+    triangle_input.vertexStrideInBytes  = np.dtype( 'f4' ).itemsize*4 # four floats per vert 
+    triangle_input.numVertices          = NUM_VERTS
+    triangle_input.vertexBuffers        = [ vertices_0.data.ptr, vertices_1.data.ptr, vertices_2.data.ptr ]
+    triangle_input.flags                = [ optix.GEOMETRY_FLAG_DISABLE_ANYHIT ]
+    triangle_input.numSbtRecords        = 1
+    triangle_input.sbtIndexOffsetBuffer = 0
+
+    gas_buffer_sizes = state.context.accelComputeMemoryUsage( 
+        [ accel_options  ], 
+        [ triangle_input ]
+    )
+
+    d_temp_buffer    = cp.cuda.alloc( gas_buffer_sizes.tempSizeInBytes   )
     d_output_buffer  = cp.cuda.alloc( gas_buffer_sizes.outputSizeInBytes ) 
+    d_result         = cp.array( [ 0 ], dtype = 'u8' )
 
-    d_result = cp.array( [ 0 ], dtype = 'u8' )
     emit_property = optix.AccelEmitDesc(
         type = optix.PROPERTY_TYPE_COMPACTED_SIZE,
         result = d_result.data.ptr
         )
 
-    gas_handle = ctx.accelBuild(
+    state.tri_gas_handle = state.context.accelBuild(
         0,  # CUDA stream
         [ accel_options ],
         [ triangle_input ],
-        d_temp_buffer,
-        gas_buffer_sizes.tempSizeInBytes,
-        d_output_buffer,
-        gas_buffer_sizes.outputSizeInBytes,
-        [ emit_property ]
-    )
-
-    compacted_gas_size = cp.asnumpy( d_result )
-
-    if compacted_gas_size < gas_buffer_sizes.outputSizeInBytes:
-
-        d_compacted_output_buffer = cp.cuda.alloc( compacted_gas_size )
-        compacted_gas_handle = ctx.accelCompact( 
-            0,  #CUDA stream
-            gas_handle,
-            d_compacted_output_buffer,
-            compacted_gas_size
-        )
-        return compacted_gas_handle, d_compacted_output_buffer
-    else:
-        return gas_handle, d_output_buffer
-
-
-def build_sphere_gas(ctx):
-
-    accel_options = optix.AccelBuildOptions(
-        buildFlags = int( optix.BUILD_FLAG_ALLOW_COMPACTION ),
-        operation  = optix.BUILD_OPERATION_BUILD,
-    )  
-
-    aabb = cp.array( [ 
-        -1.5, -1.0, -0.5,
-        -0.5, 0.0, 0.5
-        ], dtype = 'f4')
-
-    curve_input_flags = [ optix.GEOMETRY_FLAG_DISABLE_ANYHIT ]
-    curve_input = optix.BuildInputCustomPrimitiveArray(
-        aabbBuffers = [ aabb.data.ptr ],
-        numPrimitives = 1,
-        flags = curve_input_flags,
-        numSbtRecords = 1
-    )
-
-    gas_buffer_sizes = ctx.accelComputeMemoryUsage( [accel_options], [curve_input] )
-    d_temp_buffer    = cp.cuda.alloc( gas_buffer_sizes.tempSizeInBytes )
-    d_output_buffer  = cp.cuda.alloc( gas_buffer_sizes.outputSizeInBytes )
-
-    d_result = cp.array( [ 0 ], dtype = 'u8' )
-    emit_property = optix.AccelEmitDesc(
-        type = optix.PROPERTY_TYPE_COMPACTED_SIZE,
-        result = d_result.data.ptr
-        )
-
-    sphere_gas_handle = ctx.accelBuild(
-        0,  # CUDA stream
-        [ accel_options ],
-        [ curve_input ],
         d_temp_buffer.ptr,
         gas_buffer_sizes.tempSizeInBytes,
         d_output_buffer.ptr,
         gas_buffer_sizes.outputSizeInBytes,
         [ emit_property ]
-        )
+    )
 
-    compacted_gas_size = cp.asnumpy( d_result )
+    compacted_gas_size = cp.asnumpy( d_result )[0]
 
-    if compacted_gas_size < gas_buffer_sizes.outputSizeInBytes:
-        d_final_output_buffer = cp.cuda.alloc( compacted_gas_size )
-        final_gas_handle = ctx.accelCompact( 
+    if compacted_gas_size < gas_buffer_sizes.outputSizeInBytes and False:
+
+        state.d_tri_gas_output_buffer = cp.cuda.alloc( compacted_gas_size )
+        state.tri_gas_handle = state.context.accelCompact( 
             0,  #CUDA stream
-            sphere_gas_handle,
-            d_final_output_buffer,
+            state.tri_gas_handle,
+            state.d_tri_gas_output_buffer.ptr,
             compacted_gas_size
         )
     else:
-        d_final_output_buffer = d_output_buffer
-        final_gas_handle = sphere_gas_handle
+        state.d_tri_gas_output_buffer = d_output_buffer 
+
+
+def build_sphere_gas( state ):
+
+    accel_options = optix.AccelBuildOptions(
+        buildFlags = optix.BUILD_FLAG_ALLOW_COMPACTION,
+        operation  = optix.BUILD_OPERATION_BUILD
+    )  
+
+    aabb = cp.array( [ 
+        -1.5, -1.0, -0.5,
+        -0.5,  0.0,  0.5
+        #-1.0, -1.0, -1.0,
+        # 1.0,  1.0,  1.0
+        ], dtype = 'f4'
+    )
+
+    sphere_input = optix.BuildInputCustomPrimitiveArray(
+        aabbBuffers    = [ aabb.data.ptr ],
+        numPrimitives  = 1,
+        #flags          = [ optix.GEOMETRY_FLAG_DISABLE_ANYHIT ],
+        flags          = [ optix.GEOMETRY_FLAG_NONE],
+        numSbtRecords  = 1
+    )
+
+    gas_buffer_sizes = state.context.accelComputeMemoryUsage( 
+        [ accel_options ], 
+        [ sphere_input  ] 
+    )
+
+    d_temp_buffer    = cp.cuda.alloc( gas_buffer_sizes.tempSizeInBytes )
+    d_output_buffer  = cp.cuda.alloc( gas_buffer_sizes.outputSizeInBytes )
+    d_result         = cp.array( [ 0 ], dtype = 'u8' )
+
+    emit_property = optix.AccelEmitDesc(
+        type = optix.PROPERTY_TYPE_COMPACTED_SIZE,
+        result = d_result.data.ptr
+    )
+
+    state.sphere_gas_handle = state.context.accelBuild(
+        0,  # CUDA stream
+        [ accel_options ],
+        [ sphere_input ],
+        d_temp_buffer.ptr,
+        gas_buffer_sizes.tempSizeInBytes,
+        d_output_buffer.ptr,
+        gas_buffer_sizes.outputSizeInBytes,
+        [ emit_property ]
+    )
+
+    compacted_gas_size = cp.asnumpy( d_result )[0]
+
+    if compacted_gas_size < gas_buffer_sizes.outputSizeInBytes and False:
+        state.d_sphere_gas_output_buffer = cp.cuda.alloc( compacted_gas_size )
+        state.sphere_gas_handle = state.context.accelCompact( 
+            0,  #CUDA stream
+            state.sphere_gas_handle,
+            state.d_sphere_gas_output_buffer,
+            compacted_gas_size
+        )
+    else:
+        state.d_sphere_gas_output_buffer = d_output_buffer 
+
+
+def create_sphere_xform( state ):
 
     motion_keys = [
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 1.0, 0.0,
+
         1.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.5,
         0.0, 0.0, 1.0, 0.0
@@ -311,184 +367,390 @@ def build_sphere_gas(ctx):
     motion_options.timeEnd   = 1.0
     motion_options.flags     = optix.MOTION_FLAG_NONE
 
-    motion_transform         = optix.MatrixMotionTransform( 
-                                final_gas_handle,
-                                motion_options,
-                                motion_keys
-                                )
+    motion_transform  = optix.MatrixMotionTransform( 
+        child         = state.sphere_gas_handle,
+        motionOptions = motion_options,
+        transform     = motion_keys
+        )
 
     xform_bytes = optix.getDeviceRepresentation( motion_transform )
-    #xform_bytes = motion_transform.getBytes()
-    d_sphere_motion_transform = cp.array( np.frombuffer( xform_bytes, dtype='B' ) )
+    state.d_sphere_motion_transform = cp.array( np.frombuffer( xform_bytes, dtype='B' ) )
 
-    sphere_motion_transform_handle = optix.convertPointerToTraversableHandle(
-                                    ctx,
-                                    d_sphere_motion_transform.data.ptr,
-                                    optix.TRAVERSABLE_TYPE_MATRIX_MOTION_TRANSFORM
-                                    )
-
-    return sphere_motion_transform_handle, d_final_output_buffer
+    state.sphere_motion_transform_handle = optix.convertPointerToTraversableHandle(
+        state.context,
+        state.d_sphere_motion_transform.data.ptr,
+        optix.TRAVERSABLE_TYPE_MATRIX_MOTION_TRANSFORM
+    )
 
 
-def build_ias(ctx, sphere_handle, triangle_handle):
+def build_ias( state ):
 
-    instance_data = [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0 ]
+    instance_xform = [ 
+        1.0, 0.0, 0.0, 0.0, 
+        0.0, 1.0, 0.0, 0.0, 
+        0.0, 0.0, 1.0, 0.0 
+    ]
 
-    sphere_instance                   = optix.Instance(instance_data)
-    sphere_instance.flags             = optix.INSTANCE_FLAG_NONE
-    sphere_instance.instanceId        = 1
-    sphere_instance.sbtOffset         = 0
-    sphere_instance.visibilityMask    = 1
-    sphere_instance.traversableHandle = sphere_handle 
+    sphere_instance = optix.Instance( 
+        transform         = instance_xform,
+        flags             = optix.INSTANCE_FLAG_NONE,
+        instanceId        = 0,
+        sbtOffset         = 0,
+        visibilityMask    = 1,
+        #traversableHandle = state.sphere_motion_transform_handle
+        traversableHandle = state.sphere_gas_handle
+    )
 
-    triangle_instance                   = optix.Instance(instance_data)
-    triangle_instance.flags             = optix.INSTANCE_FLAG_NONE
-    triangle_instance.instanceId        = 0
-    triangle_instance.sbtOffset         = 1
-    triangle_instance.visibilityMask    = 1
-    triangle_instance.traversableHandle = triangle_handle
-    instances = [ sphere_instance, triangle_instance ]
+    triangle_instance = optix.Instance(
+        transform         = instance_xform,
+        flags             = optix.INSTANCE_FLAG_NONE,
+        instanceId        = 1,
+        sbtOffset         = 1,
+        visibilityMask    = 1,
+        traversableHandle = state.tri_gas_handle 
+    )
+
+    instances       = [ sphere_instance, triangle_instance ]
     instances_bytes = optix.getDeviceRepresentation( instances ) 
+    d_instances     = cp.array( np.frombuffer( instances_bytes, dtype='B' ) )
 
-    d_instances = cp.array( np.frombuffer( instances_bytes, dtype='B' ) )
+    instance_input = optix.BuildInputInstanceArray(
+        instances    = d_instances.data.ptr,
+        numInstances = len( instances ) 
+    )
 
-    instance_input = optix.BuildInputInstanceArray()
-    instance_input.instances    = d_instances.data.ptr
-    instance_input.numInstances = len(instances) 
-
-    accel_options = optix.AccelBuildOptions() 
+    accel_options  = optix.AccelBuildOptions() 
     accel_options.buildFlags              = optix.BUILD_FLAG_NONE
     accel_options.operation               = optix.BUILD_OPERATION_BUILD
-
     accel_options.motionOptions.numKeys   = 2
     accel_options.motionOptions.timeBegin = 0.0
     accel_options.motionOptions.timeEnd   = 1.0
     accel_options.motionOptions.flags     = optix.MOTION_FLAG_NONE
 
-    ias_buffer_sizes = ctx.accelComputeMemoryUsage( [accel_options], [instance_input] )
-    d_temp_buffer  = cp.cuda.alloc( ias_buffer_sizes.tempSizeInBytes ) 
-    d_ias_output_buffer = cp.cuda.alloc( ias_buffer_sizes.outputSizeInBytes)
+    ias_buffer_sizes    = state.context.accelComputeMemoryUsage( 
+        [ accel_options  ], 
+        [ instance_input ]
+    )
+    d_temp_buffer             = cp.cuda.alloc( ias_buffer_sizes.tempSizeInBytes   ) 
+    state.d_ias_output_buffer = cp.cuda.alloc( ias_buffer_sizes.outputSizeInBytes )
 
-    ias_handle = ctx.accelBuild(
+    state.ias_handle = state.context.accelBuild(
         0,    # CUDA stream
-        [ accel_options ], 
+        [ accel_options  ], 
         [ instance_input ],   
         d_temp_buffer.ptr,
         ias_buffer_sizes.tempSizeInBytes,
-        d_ias_output_buffer.ptr,
+        state.d_ias_output_buffer.ptr,
         ias_buffer_sizes.outputSizeInBytes,
         [] # emitted properties
         )
 
 
+def create_module( state ):
 
-    # TODO
-
-    return 0, 0
-
-
-def create_module(ctx):
-
-    module_compile_options = optix.ModuleCompileOptions()
+    module_compile_options                  = optix.ModuleCompileOptions()
     module_compile_options.maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT
     module_compile_options.optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT
     module_compile_options.debugLevel       = optix.COMPILE_DEBUG_LEVEL_DEFAULT
 
-    pipeline_compile_options = optix.PipelineCompileOptions()
-    pipeline_compile_options.numPayloadValues = 3
-    pipeline_compile_options.numAttributeValues = 3
-    pipeline_compile_options.usesMotionBlur = True
-    pipeline_compile_options.exceptionFlags = optix.EXCEPTION_FLAG_NONE
-    pipeline_compile_options.pipelineLaunchParamsVariableName = "params"
+    state.pipeline_compile_options = optix.PipelineCompileOptions(
+        traversableGraphFlags            = optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY,
+        numPayloadValues                 = 3,
+        numAttributeValues               = 3,
+        usesMotionBlur                   = True,
+        exceptionFlags                   = optix.EXCEPTION_FLAG_NONE,
+        pipelineLaunchParamsVariableName = "params"
+    )
 
     simple_motion_blur_cu = os.path.join(os.path.dirname(__file__), 'simpleMotionBlur.cu')
     simple_motion_blur_ptx = compile_cuda( simple_motion_blur_cu )
 
-    module, log = ctx.moduleCreateFromPTX(
+    state.ptx_module, log = state.context.moduleCreateFromPTX(
         module_compile_options,
-        pipeline_compile_options,
+        state.pipeline_compile_options,
         simple_motion_blur_ptx
     )
 
-    return module
 
-
-def create_program_groups(ctx, module):
+def create_program_groups( state ):
 
     program_group_options = optix.ProgramGroupOptions()
     
-    raygen_program_group_desc = optix.ProgramGroupDesc()
-    raygen_program_group_desc.raygenModule = module
-    raygen_program_group_desc.raygenEntryFunctionName = "__raygen__rg"
+    raygen_program_group_desc = optix.ProgramGroupDesc(
+        raygenModule            = state.ptx_module,
+        raygenEntryFunctionName = "__raygen__rg"
+    )
 
     log = None
-    raygen_program_group = None
     if optix_version_gte( (7,4) ):
         program_group_options = optix.ProgramGroupOptions()
-        raygen_prog_group, log = ctx.programGroupCreate(
+        state.raygen_prog_group, log = state.context.programGroupCreate(
             [ raygen_program_group_desc ],
             program_group_options
-            )
+        )
     else:
-        raygen_prog_group, log = ctx.programGroupCreate(
+        state.raygen_prog_group, log = state.context.programGroupCreate(
             [ raygen_program_group_desc ]
-            )
+        )
     print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
 
-    miss_prog_group_desc                        = optix.ProgramGroupDesc()
-    miss_prog_group_desc.missModule             = module
-    miss_prog_group_desc.missEntryFunctionName  = "__miss__camera"
-    miss_prog_group = None
+    miss_prog_group_desc = optix.ProgramGroupDesc(
+        missModule             = state.ptx_module,
+        missEntryFunctionName  = "__miss__camera"
+    )
     if optix_version_gte( (7,4) ):
         program_group_options = optix.ProgramGroupOptions()
-        miss_prog_group, log = ctx.programGroupCreate(
+        state.miss_group, log = state.context.programGroupCreate(
             [ miss_prog_group_desc ],
             program_group_options
-            )
+        )
     else:
-        miss_prog_group, log = ctx.programGroupCreate(
+        state.miss_group, log = state.context.programGroupCreate(
             [ miss_prog_group_desc ]
-            )
-    print( "\tProgramGroup mis create log: <<<{}>>>".format( log ) )
+        )
+    print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
-    hitgroup_prog_group_desc                             = optix.ProgramGroupDesc()
-    hitgroup_prog_group_desc.hitgroupModuleCH            = module
-    hitgroup_prog_group_desc.hitgroupEntryFunctionNameCH = "__closesthit__camera"
-    hitgroup_prog_group_desc.hitgroupModuleIS            = module
+    hitgroup_prog_group_desc = optix.ProgramGroupDesc(
+        hitgroupModuleCH            = state.ptx_module,
+        hitgroupEntryFunctionNameCH = "__closesthit__camera",
+    )
+    if optix_version_gte( (7,4) ):
+        program_group_options = optix.ProgramGroupOptions()
+        state.tri_hit_group, log = state.context.programGroupCreate(
+            [ hitgroup_prog_group_desc ],
+            program_group_options
+        )
+    else:
+        state.tri_hit_group, log = state.context.programGroupCreate(
+            [ hitgroup_prog_group_desc ]
+        )
+    print( "\tProgramGroup triangle hit create log: <<<{}>>>".format( log ) )
+        
+    hitgroup_prog_group_desc.hitgroupModuleIS            = state.ptx_module
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameIS = "__intersection__sphere"
-
-    triangle_hitgroup_prog_group = None
     if optix_version_gte( (7,4) ):
         program_group_options = optix.ProgramGroupOptions()
-        triangle_hitgroup_prog_group, log = ctx.programGroupCreate(
+        state.sphere_hit_group, log = state.context.programGroupCreate(
             [ hitgroup_prog_group_desc ],
             program_group_options
-            )
+        )
     else:
-        triangle_hitgroup_prog_group, log = ctx.programGroupCreate(
+        state.sphere_hit_group, log = state.context.programGroupCreate(
             [ hitgroup_prog_group_desc ]
-            )
-    
-    sphere_hitgroup_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions()
-        sphere_hitgroup_prog_group, log = ctx.programGroupCreate(
-            [ hitgroup_prog_group_desc ],
-            program_group_options
-            )
-    else:
-        sphere_hitgroup_prog_group, log = ctx.programGroupCreate(
-            [ hitgroup_prog_group_desc ]
-            )
-    print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
-
-    return [ raygen_prog_group[0], miss_prog_group[0], \
-        triangle_hitgroup_prog_group[0], sphere_hitgroup_prog_group[0] ]
+        )
+    print( "\tProgramGroup sphere hit create log: <<<{}>>>".format( log ) )
 
 
-def create_pipeline(ctx, program_groups):
 
-    pipeline_link_options = optix.PipelineLinkOptions()
+def create_pipeline( state ):
+
+    program_groups = [
+        state.raygen_prog_group,
+        state.miss_group,
+        state.sphere_hit_group,
+        state.tri_hit_group
+    ]
+
+    pipeline_link_options = optix.PipelineLinkOptions(
+        maxTraceDepth = 2,
+        debugLevel = optix.COMPILE_DEBUG_LEVEL_FULL
+    )
+
+    log = ""
+    state.pipeline = state.context.pipelineCreate(
+        state.pipeline_compile_options,
+        pipeline_link_options,
+        program_groups,
+        log
+    )
+
+    stack_sizes = optix.StackSizes()
+    for prog_group in program_groups:
+        optix.util.accumulateStackSizes( prog_group, stack_sizes )
+
+    ( dc_stack_size_from_trav, dc_stack_size_from_state, cc_stack_size ) = \
+        optix.util.computeStackSizes(
+            stack_sizes,
+            1,  # maxTraceDepth
+            0,  # maxCCDepth
+            0   # maxDCDepth
+        )
+
+    state.pipeline.setStackSize(
+        1024, #dc_stack_size_from_trav,
+        1024, #dc_stack_size_from_state,
+        1024, #cc_stack_size,
+        3   # maxTraversableDepth ( 3 since largest depth is IAS->MT->GAS )
+    )
+
+
+def create_sbt( state ):
+    print( "Creating sbt ... " )
+
+    header_format = '{}V'.format( optix.SBT_RECORD_HEADER_SIZE )
+
+    #
+    # raygen record
+    #
+    formats = [ header_format ]
+    itemsize = get_aligned_itemsize( formats, optix.SBT_RECORD_ALIGNMENT )
+    dtype = np.dtype( {
+        'names'     : ['header'],
+        'formats'   : formats,
+        'itemsize'  : itemsize,
+        'aligned'     : True 
+        } )
+    h_raygen_record = np.array( 
+        [ optix.sbtRecordGetHeader( state.raygen_prog_group) ], 
+        dtype = dtype 
+    )
+    optix.sbtRecordPackHeader( state.raygen_prog_group, h_raygen_record )
+    state.d_raygen_record = array_to_device_memory( h_raygen_record )
+
+    #
+    # miss records
+    #
+    formats = [ header_format, 'f4','f4','f4', 'u4' ]
+    itemsize = get_aligned_itemsize( formats, optix.SBT_RECORD_ALIGNMENT )
+    dtype = np.dtype( {
+        'names'     : [ 'header', 'r', 'g', 'b', 'pad' ],
+        'formats'   : formats,
+        'itemsize'  : itemsize,
+        'aligned'     : True 
+        } )
+    h_miss_record = np.array( [ (
+            optix.sbtRecordGetHeader( state.miss_group ), 
+            0.1, 0.1, 0.1, 
+            0 
+        ) ], 
+        dtype=dtype 
+    )
+    optix.sbtRecordPackHeader( state.miss_group, h_miss_record )
+    state.d_miss_records = array_to_device_memory( h_miss_record )
+
+    #
+    # hit group records
+    #
+    formats = [ 
+        header_format, 
+        'f4','f4','f4',
+        'f4','f4','f4',
+        'f4',
+        'u4'
+    ]
+    itemsize = get_aligned_itemsize( formats, optix.SBT_RECORD_ALIGNMENT )
+    hit_record_dtype = np.dtype( {
+        'names' : [ 
+            'header',
+            'r','g','b',
+            'x','y','z',
+            'rad',
+            'pad' 
+        ],
+        'formats'   : formats,
+        'itemsize'  : itemsize,
+        'aligned'      : True
+        } )
+
+    sphere_record_header = optix.sbtRecordGetHeader( state.sphere_hit_group )
+    triangle_record_header   = optix.sbtRecordGetHeader( state.tri_hit_group )
+
+    h_hitgroup_records = np.array( [ 
+        ( 
+            sphere_record_header, 
+            0.9,  0.1, 0.1,
+            -1.0, -0.5, 0.1,
+            0.5,
+            0.0
+        ), 
+        (
+            triangle_record_header, 
+            0.1, 0.1, 0.9,
+            0.0, 0.0, 0.0,    # unused
+            0.0,              # unused 
+            0.0   
+        ) ],
+        dtype=hit_record_dtype 
+    )
+
+    state.d_hitgroup_records = array_to_device_memory( h_hitgroup_records )
+
+    state.sbt = optix.ShaderBindingTable(
+        raygenRecord                = state.d_raygen_record.ptr,
+        missRecordBase              = state.d_miss_records.ptr,
+        missRecordStrideInBytes     = state.d_miss_records.mem.size,
+        missRecordCount             = 1,
+        hitgroupRecordBase          = state.d_hitgroup_records.ptr,
+        hitgroupRecordStrideInBytes = state.d_hitgroup_records.mem.size,
+        hitgroupRecordCount         = 2 
+    )
+
+
+def launch( state ):
+    print( "Launching ... " )
+
+    pix_bytes = pix_width * pix_height * 4
+
+    h_accum = np.zeros( (pix_width, pix_height, 4 ), 'f4' )
+    h_accum[0:pix_width, 0:pix_height] = [255, 128, 0, 255]
+    d_accum = cp.array( h_accum )
+
+    h_frame = np.zeros( (pix_width, pix_height, 4 ), 'B' )
+    h_frame[0:pix_width, 0:pix_height] = [255, 128, 0, 255]
+    d_frame = cp.array( h_frame )
+
+    params = [
+        ( 'u4', 'image_width',    pix_width ),
+        ( 'u4', 'image_height',   pix_height ),
+        ( 'u8', 'accum',          d_accum.data.ptr ),
+        ( 'u8', 'frame',          d_frame.data.ptr ),
+        ( 'u4', 'subframe index', 0 ),
+        ( 'f4', 'cam_eye_x',      0 ),
+        ( 'f4', 'cam_eye_y',      0 ),
+        ( 'f4', 'cam_eye_z',      5.0 ),
+        ( 'f4', 'cam_U_x',        1.10457 ),
+        ( 'f4', 'cam_U_y',        0 ),
+        ( 'f4', 'cam_U_z',        0 ),
+        ( 'f4', 'cam_V_x',        0 ),
+        ( 'f4', 'cam_V_y',        0.828427 ),
+        ( 'f4', 'cam_V_z',        0 ),
+        ( 'f4', 'cam_W_x',        0 ),
+        ( 'f4', 'cam_W_y',        0 ),
+        ( 'f4', 'cam_W_z',        -2.0 ),
+        #( 'u8', 'trav_handle',   state.ias_handle )
+        ( 'u8', 'trav_handle',   state.sphere_gas_handle)
+    ]
+
+    formats = [ x[0] for x in params ] 
+    names   = [ x[1] for x in params ] 
+    values  = [ x[2] for x in params ] 
+    itemsize = get_aligned_itemsize( formats, 8 )
+    params_dtype = np.dtype( { 
+        'names'   : names, 
+        'formats' : formats,
+        'itemsize': itemsize,
+        'aligned'   : True
+        } )
+    h_params = np.array( [ tuple(values) ], dtype=params_dtype )
+    d_params = array_to_device_memory( h_params )
+
+    stream = cp.cuda.Stream()
+    optix.launch( 
+        state.pipeline, 
+        stream.ptr, 
+        d_params.ptr, 
+        h_params.dtype.itemsize, 
+        state.sbt,
+        pix_width,
+        pix_height,
+        1 # depth
+        )
+
+    stream.synchronize()
+
+    h_pix = cp.asnumpy( d_frame )
+    return h_pix
+
 
 
 #-------------------------------------------------------------------------------
@@ -499,27 +761,28 @@ def create_pipeline(ctx, program_groups):
 
 
 def main():
+    state = State()
+    create_context       ( state )
+    build_triangle_gas   ( state )
+    build_sphere_gas     ( state )
+    create_sphere_xform  ( state )
+    build_ias            ( state )
+    create_module        ( state )
+    create_program_groups( state )
+    create_pipeline      ( state )
+    create_sbt           ( state )
 
+    #for i in  state.__dict__.items():
+    #    print( i )
 
+    pix = launch( state ) 
 
-    ctx             = create_ctx()
-    tri_handle,    d_tri_gas_buffer    = build_triangle_gas(ctx)
-    sphere_handle, d_sphere_gas_buffer = build_sphere_gas(ctx)
-    ias_handle,    d_ias_buffer        = build_ias(ctx, sphere_handle, tri_handle)
-    module          = create_module(ctx)
-    program_groups  = create_program_groups(ctx, module)
-    pipeline        = create_pipeline(ctx, program_groups)
+    print( "Total number of log messages: {}".format( logger.num_mssgs ) )
 
-    # TODO
-    # sbt              = create_sbt( prog_groups ) 
-    # pix              = launch( pipeline, sbt, gas_handle ) 
-
-    # print( "Total number of log messages: {}".format( logger.num_mssgs ) )
-
-    # pix = pix.reshape( ( pix_height, pix_width, 4 ) )     # PIL expects [ y, x ] resolution
-    # img = ImageOps.flip( Image.fromarray( pix, 'RGBA' ) ) # PIL expects y = 0 at bottom
-    # img.show()
-    # img.save( 'my.png' )
+    pix = pix.reshape( ( pix_height, pix_width, 4 ) )     # PIL expects [ y, x ] resolution
+    img = ImageOps.flip( Image.fromarray( pix, 'RGBA' ) ) # PIL expects y = 0 at bottom
+    img.show()
+    img.save( 'my.png' )
 
 
 if __name__ == "__main__":

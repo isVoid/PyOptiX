@@ -294,7 +294,7 @@ def create_program_groups( ctx, module ):
             )
     print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
 
-    return [ raygen_prog_group[0], miss_prog_group[0], hitgroup_prog_group[0] ]
+    return [ raygen_prog_group, miss_prog_group, hitgroup_prog_group ]
 
 
 def create_pipeline( ctx, program_groups, pipeline_compile_options ):
@@ -403,10 +403,10 @@ def create_sbt( prog_groups ):
     return optix.ShaderBindingTable(
         raygenRecord                = d_raygen_sbt.ptr,
         missRecordBase              = d_miss_sbt.ptr,
-        missRecordStrideInBytes     = d_miss_sbt.mem.size,
+        missRecordStrideInBytes     = h_miss_sbt.dtype.itemsize,
         missRecordCount             = 1,
         hitgroupRecordBase          = d_hitgroup_sbt.ptr,
-        hitgroupRecordStrideInBytes = d_hitgroup_sbt.mem.size,
+        hitgroupRecordStrideInBytes = h_hitgroup_sbt.dtype.itemsize,
         hitgroupRecordCount         = 1
         )
 

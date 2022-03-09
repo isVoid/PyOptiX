@@ -397,8 +397,7 @@ def build_ias( state ):
         instanceId        = 0,
         sbtOffset         = 0,
         visibilityMask    = 1,
-        #traversableHandle = state.sphere_motion_transform_handle
-        traversableHandle = state.sphere_gas_handle
+        traversableHandle = state.sphere_motion_transform_handle
     )
 
     triangle_instance = optix.Instance(
@@ -418,14 +417,18 @@ def build_ias( state ):
         instances    = d_instances.data.ptr,
         numInstances = len( instances ) 
     )
+    
+    motion_options           = optix.MotionOptions()
+    motion_options.numKeys   = 2 
+    motion_options.timeBegin = 0.0
+    motion_options.timeEnd   = 1.0
+    motion_options.flags     = optix.MOTION_FLAG_NONE
 
-    accel_options  = optix.AccelBuildOptions() 
-    accel_options.buildFlags              = optix.BUILD_FLAG_NONE
-    accel_options.operation               = optix.BUILD_OPERATION_BUILD
-    accel_options.motionOptions.numKeys   = 2
-    accel_options.motionOptions.timeBegin = 0.0
-    accel_options.motionOptions.timeEnd   = 1.0
-    accel_options.motionOptions.flags     = optix.MOTION_FLAG_NONE
+    accel_options = optix.AccelBuildOptions(
+        buildFlags    = optix.BUILD_FLAG_NONE,
+        operation     = optix.BUILD_OPERATION_BUILD,
+        motionOptions = motion_options
+        )    
 
     ias_buffer_sizes    = state.context.accelComputeMemoryUsage( 
         [ accel_options  ], 
@@ -678,10 +681,10 @@ def create_sbt( state ):
     state.sbt = optix.ShaderBindingTable(
         raygenRecord                = state.d_raygen_record.ptr,
         missRecordBase              = state.d_miss_records.ptr,
-        missRecordStrideInBytes     = state.d_miss_records.mem.size,
+        missRecordStrideInBytes     = h_miss_record.dtype.itemsize,
         missRecordCount             = 1,
         hitgroupRecordBase          = state.d_hitgroup_records.ptr,
-        hitgroupRecordStrideInBytes = state.d_hitgroup_records.mem.size,
+        hitgroupRecordStrideInBytes = h_hitgroup_records.dtype.itemsize,
         hitgroupRecordCount         = 2 
     )
 
@@ -717,8 +720,8 @@ def launch( state ):
         ( 'f4', 'cam_W_x',        0 ),
         ( 'f4', 'cam_W_y',        0 ),
         ( 'f4', 'cam_W_z',        -2.0 ),
-        #( 'u8', 'trav_handle',   state.ias_handle )
-        ( 'u8', 'trav_handle',   state.sphere_gas_handle)
+        ( 'u8', 'trav_handle',   state.ias_handle )
+        #( 'u8', 'trav_handle',   state.tri_gas_handle)
     ]
 
     formats = [ x[0] for x in params ] 
@@ -771,9 +774,6 @@ def main():
     create_program_groups( state )
     create_pipeline      ( state )
     create_sbt           ( state )
-
-    #for i in  state.__dict__.items():
-    #    print( i )
 
     pix = launch( state ) 
 

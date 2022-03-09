@@ -233,7 +233,7 @@ def create_program_groups( ctx, module ):
                 )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
-    return ( raygen_prog_group[0], miss_prog_group[0] )
+    return ( raygen_prog_group, miss_prog_group )
 
 
 def create_pipeline( ctx, raygen_prog_group, pipeline_compile_options ):
@@ -316,7 +316,7 @@ def create_sbt( raygen_prog_group, miss_prog_group ):
     sbt = optix.ShaderBindingTable()
     sbt.raygenRecord                = d_raygen_sbt.ptr
     sbt.missRecordBase              = d_miss_sbt.ptr
-    sbt.missRecordStrideInBytes     = d_miss_sbt.mem.size
+    sbt.missRecordStrideInBytes     = h_miss_sbt.dtype.itemsize
     sbt.missRecordCount             = 1
     return sbt
 

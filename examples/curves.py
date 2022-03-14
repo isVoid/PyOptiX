@@ -331,7 +331,7 @@ def create_program_groups():
                 )
     print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
 
-    return [ raygen_prog_group[0], miss_prog_group[0], hitgroup_prog_group[0] ]
+    return [ raygen_prog_group, miss_prog_group, hitgroup_prog_group ]
 program_groups = create_program_groups()
 
 

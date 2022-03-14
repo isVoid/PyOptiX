@@ -477,7 +477,6 @@ def create_module( state ):
 
 def create_program_groups( state ):
 
-    program_group_options = optix.ProgramGroupOptions()
     
     raygen_program_group_desc = optix.ProgramGroupDesc(
         raygenModule            = state.ptx_module,

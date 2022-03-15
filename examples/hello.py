@@ -109,14 +109,6 @@ def compile_cuda( cuda_file ):
 #
 #-------------------------------------------------------------------------------
 
-def init_optix():
-    print( "Initializing cuda ..." )
-    cp.cuda.runtime.free( 0 )
-
-    print( "Initializing optix ..." )
-    optix.init()
-
-
 def create_ctx():
     print( "Creating optix device context ..." )
 
@@ -165,7 +157,7 @@ def create_module( ctx, pipeline_options, hello_ptx ):
         'align'   : True
         } )
 
-    if optix.version()[1] >= 2:
+    if optix_version_gte( (7,2) ):
         bound_value = array.array( 'i', [pix_width] )
         bound_value_entry = optix.ModuleCompileBoundValueEntry(
             pipelineParamOffsetInBytes = params_dtype.fields['image_width'][1],
@@ -198,8 +190,6 @@ def create_module( ctx, pipeline_options, hello_ptx ):
 def create_program_groups( ctx, module ):
     print( "Creating program groups ... " )
 
-
-    # TODO: optix.ProgramGroup.Kind.RAYGEN ?
     raygen_prog_group_desc                          = optix.ProgramGroupDesc()
     raygen_prog_group_desc.raygenModule             = module
     raygen_prog_group_desc.raygenEntryFunctionName  = "__raygen__hello"
@@ -207,10 +197,10 @@ def create_program_groups( ctx, module ):
     log = None
     raygen_prog_group = None
     if optix_version_gte( (7,4) ):
-        # TODO: optix.ProgramGroup.Options() ?
+        #  ProgramGroupOptions introduced in OptiX 7.4
         program_group_options = optix.ProgramGroupOptions() 
         raygen_prog_group, log = ctx.programGroupCreate(
-                [ raygen_prog_group_desc ], 
+                [ raygen_prog_group_desc ],
                 program_group_options,
                 )
     else:
@@ -220,17 +210,11 @@ def create_program_groups( ctx, module ):
     print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
 
     miss_prog_group_desc  = optix.ProgramGroupDesc( missEntryFunctionName = "")
-    miss_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        miss_prog_group, log = ctx.programGroupCreate(
-                [ miss_prog_group_desc ],
-                program_group_options
-                )
-    else:
-        miss_prog_group, log = ctx.programGroupCreate( 
-                [ miss_prog_group_desc ] 
-                )
+    program_group_options = optix.ProgramGroupOptions() 
+    miss_prog_group, log = ctx.programGroupCreate(
+            [ miss_prog_group_desc ]
+            # Even in 7.4+, the OptixProgramGroupOptions param is optional
+            )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
     return ( raygen_prog_group, miss_prog_group )

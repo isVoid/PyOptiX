@@ -282,34 +282,17 @@ def create_program_groups():
     raygen_prog_group_desc.raygenModule             = shading_module
     raygen_prog_group_desc.raygenEntryFunctionName  = "__raygen__rg"
 
-    log = None
-    raygen_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        raygen_prog_group, log = device_context.programGroupCreate(
-            [ raygen_prog_group_desc ], 
-            program_group_options,
-            )
-    else:
-        raygen_prog_group, log = device_context.programGroupCreate(
-            [ raygen_prog_group_desc ]
-            )
+    raygen_prog_group, log = device_context.programGroupCreate(
+        [ raygen_prog_group_desc ]
+        )
     print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
 
     miss_prog_group_desc                        = optix.ProgramGroupDesc()
     miss_prog_group_desc.missModule             = shading_module
     miss_prog_group_desc.missEntryFunctionName  = "__miss__ms"
-    miss_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        miss_prog_group, log = device_context.programGroupCreate(
-                [ miss_prog_group_desc ],
-                program_group_options
-                )
-    else:
-        miss_prog_group, log = device_context.programGroupCreate( 
-                [ miss_prog_group_desc ] 
-                )
+    miss_prog_group, log = device_context.programGroupCreate(
+            [ miss_prog_group_desc ]
+            )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
     hitgroup_prog_group_desc                             = optix.ProgramGroupDesc()
@@ -317,18 +300,9 @@ def create_program_groups():
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameCH = "__closesthit__ch"
     hitgroup_prog_group_desc.hitgroupModuleIS            = geometry_module
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameIS = "" # supplied by built-in module
-
-    hitgroup_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        hitgroup_prog_group, log = device_context.programGroupCreate(
-                [ hitgroup_prog_group_desc ], 
-                program_group_options,
-                )
-    else:
-        hitgroup_prog_group, log = device_context.programGroupCreate(
-                [ hitgroup_prog_group_desc ]
-                )
+    hitgroup_prog_group, log = device_context.programGroupCreate(
+            [ hitgroup_prog_group_desc ]
+            )
     print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
 
     return [ raygen_prog_group, miss_prog_group, hitgroup_prog_group ]

@@ -947,6 +947,7 @@ struct ProgramGroupDesc
 #if OPTIX_VERSION >= 70400
 struct ProgramGroupOptions
 {
+    ProgramGroupOptions() {}
     ProgramGroupOptions( const pyoptix::PayloadType& payload_type )
     {
          setPayloadType( payload_type );
@@ -1415,7 +1416,7 @@ pyoptix::StackSizes programGroupGetStackSize(
 py::tuple programGroupCreate(
        pyoptix::DeviceContext context,
        const py::list&        programDescriptions
-       IF_OPTIX74( COMMA const pyoptix::ProgramGroupOptions& options )
+       IF_OPTIX74( COMMA std::optional<pyoptix::ProgramGroupOptions> options )
     )
 {
     size_t log_buf_size = LOG_BUFFER_MAX_SIZE;
@@ -1479,9 +1480,12 @@ py::tuple programGroupCreate(
     std::vector<OptixProgramGroup> program_groups( programDescriptions.size() );
 
 #if OPTIX_VERSION < 70400
-       const OptixProgramGroupOptions opts{};
+    const OptixProgramGroupOptions opts{};
 #else
-       const OptixProgramGroupOptions& opts = options.options;
+    const OptixProgramGroupOptions opts = 
+        options.has_value()        ? 
+        options.value().options    : 
+        OptixProgramGroupOptions{} ;
 #endif
 
     PYOPTIX_CHECK_LOG(
@@ -2611,7 +2615,12 @@ py::enum_<OptixExceptionCodes>(m, "ExceptionCodes", py::arithmetic())
         IF_OPTIX71(
         .def( "builtinISModuleGet", &pyoptix::builtinISModuleGet )
         )
-        .def( "programGroupCreate", &pyoptix::programGroupCreate )
+        .def( 
+            "programGroupCreate", 
+            &pyoptix::programGroupCreate,
+            py::arg( "programDescriptions" )=py::list()
+            IF_OPTIX74( COMMA py::arg( "options" )=py::none()  )
+        )
         .def( "accelComputeMemoryUsage", &pyoptix::accelComputeMemoryUsage )
         .def( "accelBuild", &pyoptix::accelBuild )
         .def( "accelGetRelocationInfo", &pyoptix::accelGetRelocationInfo )

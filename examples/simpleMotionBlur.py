@@ -482,66 +482,35 @@ def create_program_groups( state ):
         raygenModule            = state.ptx_module,
         raygenEntryFunctionName = "__raygen__rg"
     )
-
-    log = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions()
-        state.raygen_prog_group, log = state.context.programGroupCreate(
-            [ raygen_program_group_desc ],
-            program_group_options
-        )
-    else:
-        state.raygen_prog_group, log = state.context.programGroupCreate(
-            [ raygen_program_group_desc ]
-        )
+    state.raygen_prog_group, log = state.context.programGroupCreate(
+        [ raygen_program_group_desc ]
+    )
     print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
 
     miss_prog_group_desc = optix.ProgramGroupDesc(
         missModule             = state.ptx_module,
         missEntryFunctionName  = "__miss__camera"
     )
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions()
-        state.miss_group, log = state.context.programGroupCreate(
-            [ miss_prog_group_desc ],
-            program_group_options
-        )
-    else:
-        state.miss_group, log = state.context.programGroupCreate(
-            [ miss_prog_group_desc ]
-        )
+    state.miss_group, log = state.context.programGroupCreate(
+        [ miss_prog_group_desc ]
+    )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
     hitgroup_prog_group_desc = optix.ProgramGroupDesc(
         hitgroupModuleCH            = state.ptx_module,
         hitgroupEntryFunctionNameCH = "__closesthit__camera",
     )
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions()
-        state.tri_hit_group, log = state.context.programGroupCreate(
-            [ hitgroup_prog_group_desc ],
-            program_group_options
-        )
-    else:
-        state.tri_hit_group, log = state.context.programGroupCreate(
-            [ hitgroup_prog_group_desc ]
-        )
+    state.tri_hit_group, log = state.context.programGroupCreate(
+        [ hitgroup_prog_group_desc ]
+    )
     print( "\tProgramGroup triangle hit create log: <<<{}>>>".format( log ) )
         
     hitgroup_prog_group_desc.hitgroupModuleIS            = state.ptx_module
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameIS = "__intersection__sphere"
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions()
-        state.sphere_hit_group, log = state.context.programGroupCreate(
-            [ hitgroup_prog_group_desc ],
-            program_group_options
-        )
-    else:
-        state.sphere_hit_group, log = state.context.programGroupCreate(
-            [ hitgroup_prog_group_desc ]
-        )
+    state.sphere_hit_group, log = state.context.programGroupCreate(
+        [ hitgroup_prog_group_desc ]
+    )
     print( "\tProgramGroup sphere hit create log: <<<{}>>>".format( log ) )
-
 
 
 def create_pipeline( state ):

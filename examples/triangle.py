@@ -226,52 +226,26 @@ def create_program_groups( ctx, module ):
     raygen_prog_group_desc                          = optix.ProgramGroupDesc()
     raygen_prog_group_desc.raygenModule             = module
     raygen_prog_group_desc.raygenEntryFunctionName  = "__raygen__rg"
-
-    log = None
-    raygen_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        raygen_prog_group, log = ctx.programGroupCreate(
-                [ raygen_prog_group_desc ], 
-                program_group_options,
-                )
-    else:
-        raygen_prog_group, log = ctx.programGroupCreate(
-                [ raygen_prog_group_desc ]
-                )
+    raygen_prog_group, log = ctx.programGroupCreate(
+        [ raygen_prog_group_desc ]
+        )
     print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
     
     miss_prog_group_desc                        = optix.ProgramGroupDesc()
     miss_prog_group_desc.missModule             = module
     miss_prog_group_desc.missEntryFunctionName  = "__miss__ms"
-    miss_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        miss_prog_group, log = ctx.programGroupCreate(
-                [ miss_prog_group_desc ],
-                program_group_options
-                )
-    else:
-        miss_prog_group, log = ctx.programGroupCreate( 
-                [ miss_prog_group_desc ] 
-                )
+    program_group_options = optix.ProgramGroupOptions() 
+    miss_prog_group, log = ctx.programGroupCreate(
+        [ miss_prog_group_desc ]
+        )
     print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
     hitgroup_prog_group_desc                             = optix.ProgramGroupDesc()
     hitgroup_prog_group_desc.hitgroupModuleCH            = module
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameCH = "__closesthit__ch"
-
-    hitgroup_prog_group = None
-    if optix_version_gte( (7,4) ):
-        program_group_options = optix.ProgramGroupOptions() 
-        hitgroup_prog_group, log = ctx.programGroupCreate(
-                [ hitgroup_prog_group_desc ], 
-                program_group_options,
-                )
-    else:
-        hitgroup_prog_group, log = ctx.programGroupCreate(
-                [ hitgroup_prog_group_desc ]
-                )
+    hitgroup_prog_group, log = ctx.programGroupCreate(
+        [ hitgroup_prog_group_desc ]
+        )
     print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
 
     return [ raygen_prog_group, miss_prog_group, hitgroup_prog_group ]

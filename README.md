@@ -76,17 +76,33 @@ set PYOPTIX_CMAKE_ARGS=-DOptix_INSTALL_DIR=C:\ProgramData\NVIDIA Corporation\Opt
 
 Build and install using `setuptools`:
 ```
-python examples/<example_name>.py
+cd optix
+python setup.py install
 ```
 
-If the example runs successfully, the example output will be rendered:
+When compiling against an Optix 7.0 SDK an additional environment variable needs to be set
+containing a path to the system's stddef.h location. E.g.
+```
+export PYOPTIX_STDDEF_DIR="/usr/include/linux"
+```
 
-![Hello output](example_output.png)
-![Triangle output](triangle.png)
+## Running the Examples
 
-Currently supported examples:
-- hello.py
-- triangle.py
+Run the examples:
+```bash
+cd examples
+python hello.py
+```
+If the example runs successfully, a green square will be rendered.
+
+## Running the Test Suite
+
+Test tests are using `pytest` and can be run from the test directory like this:
+```
+cd test
+python -m pytest
+```
+
 
 ## Explanation
 

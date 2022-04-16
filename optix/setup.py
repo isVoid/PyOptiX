@@ -55,6 +55,11 @@ class CMakeBuild(build_ext):
         if "PYOPTIX_CMAKE_ARGS" in os.environ:
             cmake_args += [ os.environ[ 'PYOPTIX_CMAKE_ARGS' ] ]
 
+        # the following is only needed for 7.0 compiles, because the optix device header of that
+        # first version included stddef.h.
+        if "PYOPTIX_STDDEF_DIR" in os.environ:
+            cmake_args += [ "-DOptiX_STDDEF_DIR={}".format(os.environ[ 'PYOPTIX_STDDEF_DIR' ]) ]
+
         env = os.environ.copy()
         env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(env.get('CXXFLAGS', ''),
                                                               self.distribution.get_version())
@@ -73,9 +78,7 @@ setup(
     author_email='kmorley@nvidia.com',
     description='Python bindings for NVIDIA OptiX',
     long_description='',
-    ext_modules=[CMakeExtension('optix._optix')],
+    ext_modules=[CMakeExtension('optix')],
     cmdclass=dict(build_ext=CMakeBuild),
-    packages=['optix'],
-    install_requires=['pynvrtc'],
     zip_safe=False,
 )

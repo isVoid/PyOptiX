@@ -1,0 +1,5 @@
+cupy
+numpy
+Pillow
+pynvrtc
+pytest

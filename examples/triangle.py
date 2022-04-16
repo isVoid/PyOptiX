@@ -30,8 +30,19 @@ from PIL import Image, ImageOps  # Image IO
 from vec_math import clamp, dot, normalize
 
 import optix
+import os
+import cupy  as cp    # CUDA bindings
+import numpy as np    # Packing of structures in C-compatible format
 
-# -------------------------------------------------------------------------------
+import array
+import ctypes         # C interop helpers
+from PIL import Image, ImageOps # Image IO
+from pynvrtc.compiler import Program
+
+import path_util
+
+
+#-------------------------------------------------------------------------------
 #
 # Util
 #
@@ -66,7 +77,15 @@ def get_aligned_itemsize(formats, alignment):
     return round_up(temp_dtype.itemsize, alignment)
 
 
-def array_to_device_memory(numpy_array, stream=cp.cuda.Stream()):
+def optix_version_gte( version ):
+    if optix.version()[0] >  version[0]:
+        return True
+    if optix.version()[0] == version[0] and optix.version()[1] >= version[1]:
+        return True
+    return False
+
+
+def array_to_device_memory( numpy_array, stream=cp.cuda.Stream() ):
 
     byte_size = numpy_array.size * numpy_array.dtype.itemsize
 
@@ -79,23 +98,31 @@ def array_to_device_memory(numpy_array, stream=cp.cuda.Stream()):
 def compile_cuda(cuda_file):
     with open(cuda_file, "rb") as f:
         src = f.read()
-    from pynvrtc.compiler import Program
+    nvrtc_dll = os.environ.get('NVRTC_DLL')
+    if nvrtc_dll is None:
+        nvrtc_dll = ''
+    print("NVRTC_DLL = {}".format(nvrtc_dll))
+    prog = Program( src.decode(), cuda_file,
+                    lib_name= nvrtc_dll )
+    compile_options = [
+        '-use_fast_math', 
+        '-lineinfo',
+        '-default-device',
+        '-std=c++11',
+        '-rdc',
+        'true',
+        #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
+        f'-I{path_util.cuda_tk_path}',
+        f'-I{path_util.include_path}'
+    ]
+    # Optix 7.0 compiles need path to system stddef.h
+    # the value of optix.stddef_path is compiled in constant. When building
+    # the module, the value can be specified via an environment variable, e.g.
+    #   export PYOPTIX_STDDEF_DIR="/usr/include/linux"
+    if (optix.version()[1] == 0):
+        compile_options.append( f'-I{path_util.stddef_path}' )
 
-    prog = Program(src.decode(), cuda_file)
-    ptx = prog.compile(
-        [
-            "-use_fast_math",
-            "-lineinfo",
-            "-default-device",
-            "-std=c++11",
-            "-rdc",
-            "true",
-            #'-IC:\\ProgramData\\NVIDIA Corporation\OptiX SDK 7.2.0\include',
-            #'-IC:\\Program Files\\NVIDIA GPU Computing Toolkit\CUDA\\v11.1\include'
-            "-I/usr/local/cuda/include",
-            f"-I{optix.include_path}",
-        ]
-    )
+    ptx  = prog.compile( compile_options )
     return ptx
 
 
@@ -130,7 +157,8 @@ def create_ctx():
     )
 
     # They can also be set and queried as properties on the struct
-    ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL
+    if optix.version()[1] >= 2:
+        ctx_options.validationMode = optix.DEVICE_CONTEXT_VALIDATION_MODE_ALL 
 
     cu_ctx = 0
     return optix.deviceContextCreate(cu_ctx, ctx_options)
@@ -174,14 +202,34 @@ def create_accel(ctx):
 
 
 def set_pipeline_options():
-    return optix.PipelineCompileOptions(
-        usesMotionBlur=False,
-        traversableGraphFlags=int(optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS),
-        numPayloadValues=3,
-        numAttributeValues=3,
-        exceptionFlags=int(optix.EXCEPTION_FLAG_NONE),
-        pipelineLaunchParamsVariableName="params",
-        usesPrimitiveTypeFlags=optix.PRIMITIVE_TYPE_FLAGS_TRIANGLE,
+    if optix.version()[1] >= 2:
+        return optix.PipelineCompileOptions(
+            usesMotionBlur         = False,
+            traversableGraphFlags  = int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
+            numPayloadValues       = 3,
+            numAttributeValues     = 3,
+            exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
+            pipelineLaunchParamsVariableName = "params",
+            usesPrimitiveTypeFlags = optix.PRIMITIVE_TYPE_FLAGS_TRIANGLE
+        )
+    else:
+        return optix.PipelineCompileOptions(
+            usesMotionBlur         = False,
+            traversableGraphFlags  = int( optix.TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS ),
+            numPayloadValues       = 3,
+            numAttributeValues     = 3,
+            exceptionFlags         = int( optix.EXCEPTION_FLAG_NONE ),
+            pipelineLaunchParamsVariableName = "params"
+        )
+
+def create_module( ctx, pipeline_options, triangle_ptx ):
+    print( "Creating optix module ..." )
+    
+
+    module_options = optix.ModuleCompileOptions(
+        maxRegisterCount = optix.COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        optLevel         = optix.COMPILE_OPTIMIZATION_DEFAULT,
+        debugLevel       = optix.COMPILE_DEBUG_LEVEL_DEFAULT
     )
 
 
@@ -202,27 +250,32 @@ def create_module(ctx, pipeline_options, ptx):
 def create_program_groups(ctx, raygen_module, miss_prog_module, hitgroup_module):
     print("Creating program groups ... ")
 
-    program_group_options = optix.ProgramGroupOptions()
-
-    raygen_prog_group_desc = optix.ProgramGroupDesc()
-    raygen_prog_group_desc.raygenModule = raygen_module
-    raygen_prog_group_desc.raygenEntryFunctionName = "__raygen__rg"
-
-    miss_prog_group_desc = optix.ProgramGroupDesc()
-    miss_prog_group_desc.missModule = miss_prog_module
-    miss_prog_group_desc.missEntryFunctionName = "__miss__ms"
+    raygen_prog_group_desc                          = optix.ProgramGroupDesc()
+    raygen_prog_group_desc.raygenModule             = module
+    raygen_prog_group_desc.raygenEntryFunctionName  = "__raygen__rg"
+    raygen_prog_group, log = ctx.programGroupCreate(
+        [ raygen_prog_group_desc ]
+        )
+    print( "\tProgramGroup raygen create log: <<<{}>>>".format( log ) )
+    
+    miss_prog_group_desc                        = optix.ProgramGroupDesc()
+    miss_prog_group_desc.missModule             = module
+    miss_prog_group_desc.missEntryFunctionName  = "__miss__ms"
+    program_group_options = optix.ProgramGroupOptions() 
+    miss_prog_group, log = ctx.programGroupCreate(
+        [ miss_prog_group_desc ]
+        )
+    print( "\tProgramGroup miss create log: <<<{}>>>".format( log ) )
 
     hitgroup_prog_group_desc = optix.ProgramGroupDesc()
     hitgroup_prog_group_desc.hitgroupModuleCH = hitgroup_module
     hitgroup_prog_group_desc.hitgroupEntryFunctionNameCH = "__closesthit__ch"
+    hitgroup_prog_group, log = ctx.programGroupCreate(
+        [ hitgroup_prog_group_desc ]
+        )
+    print( "\tProgramGroup hitgroup create log: <<<{}>>>".format( log ) )
 
-    prog_group, log = ctx.programGroupCreate(
-        [raygen_prog_group_desc, miss_prog_group_desc, hitgroup_prog_group_desc],
-        program_group_options,
-    )
-    print("\tProgramGroup create log: <<<{}>>>".format(log))
-
-    return prog_group
+    return [ raygen_prog_group, miss_prog_group, hitgroup_prog_group ]
 
 
 def create_pipeline(ctx, program_groups, pipeline_compile_options):
@@ -312,17 +365,17 @@ def create_sbt(prog_groups):
     h_hitgroup_sbt = np.array([(0)], dtype=dtype)
     optix.sbtRecordPackHeader(hitgroup_prog_group, h_hitgroup_sbt)
     global d_hitgroup_sbt
-    d_hitgroup_sbt = array_to_device_memory(h_hitgroup_sbt)
-
-    sbt = optix.ShaderBindingTable()
-    sbt.raygenRecord = d_raygen_sbt.ptr
-    sbt.missRecordBase = d_miss_sbt.ptr
-    sbt.missRecordStrideInBytes = d_miss_sbt.mem.size
-    sbt.missRecordCount = 1
-    sbt.hitgroupRecordBase = d_hitgroup_sbt.ptr
-    sbt.hitgroupRecordStrideInBytes = d_hitgroup_sbt.mem.size
-    sbt.hitgroupRecordCount = 1
-    return sbt
+    d_hitgroup_sbt = array_to_device_memory( h_hitgroup_sbt )
+    
+    return optix.ShaderBindingTable(
+        raygenRecord                = d_raygen_sbt.ptr,
+        missRecordBase              = d_miss_sbt.ptr,
+        missRecordStrideInBytes     = h_miss_sbt.dtype.itemsize,
+        missRecordCount             = 1,
+        hitgroupRecordBase          = d_hitgroup_sbt.ptr,
+        hitgroupRecordStrideInBytes = h_hitgroup_sbt.dtype.itemsize,
+        hitgroupRecordCount         = 1
+    )
 
 
 def launch(pipeline, sbt, trav_handle):
@@ -572,10 +625,10 @@ def main():
 
     print("Total number of log messages: {}".format(logger.num_mssgs))
 
-    pix = pix.reshape((pix_height, pix_width, 4))  # PIL expects [ y, x ] resolution
-    img = ImageOps.flip(Image.fromarray(pix, "RGBA"))  # PIL expects y = 0 at bottom
-    img.save("triangle.png")
+    pix = pix.reshape( ( pix_height, pix_width, 4 ) )     # PIL expects [ y, x ] resolution
+    img = ImageOps.flip( Image.fromarray( pix, 'RGBA' ) ) # PIL expects y = 0 at bottom
     img.show()
+    img.save("triangle.png")
 
 
 if __name__ == "__main__":

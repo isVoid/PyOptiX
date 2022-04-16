@@ -8,42 +8,73 @@ implementation of an OptiX kernel written in Python, compiled with
 ## Installation
 
 ### OptiX SDK
+Install any [OptiX 7.x SDK](https://developer.nvidia.com/optix/downloads/7.3.0/linux64). 
 
-Install the [OptiX 7.3.0
-SDK](https://developer.nvidia.com/optix/downloads/7.3.0/linux64).
+### Clone Repository
+via ssh:
+```
+git clone --recurse-submodules git@github.com:keithroe/PyOptiX.git
+```
+or htmls:
+```
+git clone --recurse-submodules https://github.com/keithroe/PyOptiX.git 
+```
 
 
-### Conda environment
+### Dependencies
+OptiX python module build requirements:
+* [cmake](https://cmake.org/)
+* [pip](https://pypi.org/project/pip/)
 
+To run the PyOptiX examples or tests, the python modules specified in 
+`PyOptiX/requirements.txt` must be installed:
+* pytest
+* cupy
+* numpy
+* Pillow
+* pynvrtc
+
+### Virtual Environment
+In most cases, it makes sense to setup a python environment.
+
+#### `venv` Virtual Environment
+Create and activate a new virtual environment:
+```
+python3 -m venv env
+source env/bin/activate
+```
+Install all dependencies:
+```
+pip install -r requirements.txt
+```
+
+#### Conda Environment
 Create an environment containing pre-requisites:
-
 ```
-conda create -n pyoptix python numpy conda-forge::cupy pybind11 pillow cmake numba
+conda create -n pyoptix python numpy conda-forge::cupy pybind11 pillow cmake numba pytest
 ```
-
 Activate the environment:
-
 ```
 conda activate pyoptix
 ```
+The `pynvrtc` dependency, necessary for running the examples, needs to be installed via pip:
+```
+pip install pynvrtc
+```
 
-### PyOptiX installation
+### Building the `optix` Module
+Point `setuptools/CMake` to Optix by setting the following environment variable.
 
-Build and install PyOptiX into the environment with:
-
+Linux:
 ```
 export PYOPTIX_CMAKE_ARGS="-DOptiX_INSTALL_DIR=<optix install dir>"
-pip3 install --global-option build --global-option --debug .
+```
+Windows:
+```
+set PYOPTIX_CMAKE_ARGS=-DOptix_INSTALL_DIR=C:\ProgramData\NVIDIA Corporation\OptiX SDK 7.0.0
 ```
 
-`<optix install dir>` should be the OptiX 7.3.0 install location - for example,
-`/home/gmarkall/numbadev/NVIDIA-OptiX-SDK-7.3.0-linux64-x86_64`.
-
-
-## Running the example
-
-The example can be run from the examples directory with:
-
+Build and install using `setuptools`:
 ```
 python examples/<example_name>.py
 ```

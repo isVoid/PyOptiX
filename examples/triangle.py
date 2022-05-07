@@ -11,14 +11,12 @@ import cupy as cp  # CUDA bindings
 import numpy as np  # Packing of structures in C-compatible format
 import path_util
 from numba import cuda, float32, int32, types, uint8, uint32
-from numba.core.extending import overload
-from numba.cuda import get_current_device
-from numba.cuda.compiler import compile_cuda as numba_compile_cuda
 from numba.cuda.libdevice import fast_powf, float_as_int, int_as_float
 from numba_support import (
     MissDataStruct,
     OptixRayFlags,
     OptixVisibilityMask,
+    compile_numba,
     float2,
     float3,
     make_float2,
@@ -424,51 +422,6 @@ def launch(pipeline, sbt, trav_handle):
 
     h_pix = cp.asnumpy(d_pix)
     return h_pix
-
-
-# Numba compilation
-# -----------------
-
-# An equivalent to the compile_cuda function for Python kernels. The types of
-# the arguments to the kernel must be provided, if there are any.
-
-
-def compile_numba(f, sig=(), fastmath=True, debug=False, lineinfo=False):
-    # Based on numba.cuda.compile_ptx. We don't just use
-    # compile_ptx_for_current_device because it generates a kernel with a
-    # mangled name. For proceeding beyond this prototype, an option should be
-    # added to compile_ptx in Numba to not mangle the function name.
-
-    nvvm_options = {
-        "debug": debug,
-        "lineinfo": lineinfo,
-        "fastmath": fastmath,
-        "opt": 0 if debug else 3,
-    }
-
-    cres = numba_compile_cuda(
-        f,
-        None,
-        sig,
-        fastmath=fastmath,
-        debug=debug,
-        lineinfo=lineinfo,
-        nvvm_options=nvvm_options,
-    )
-    fname = cres.fndesc.llvm_func_name
-    tgt = cres.target_context
-    filename = cres.type_annotation.filename
-    linenum = int(cres.type_annotation.linenum)
-    lib, kernel = tgt.prepare_cuda_kernel(
-        cres.library, cres.fndesc, debug, nvvm_options, filename, linenum
-    )
-    cc = get_current_device().compute_capability
-    ptx = lib.get_asm_str(cc=cc)
-
-    # Demangle name
-    mangled_name = kernel.name
-    original_name = cres.library.name
-    return ptx.replace(mangled_name, original_name)
 
 
 # -------------------------------------------------------------------------------

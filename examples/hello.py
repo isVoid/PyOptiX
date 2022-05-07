@@ -774,8 +774,6 @@ def launch( pipeline, sbt ):
 def main():
     hello_ptx = compile_numba(__raygen__hello)
 
-    init_optix()
-
     ctx              = create_ctx()
     pipeline_options = set_pipeline_options()
     module           = create_module( ctx, pipeline_options, hello_ptx )
